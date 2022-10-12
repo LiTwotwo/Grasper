@@ -15,22 +15,16 @@ class Buffer {
  public:
     Buffer(Node & node) : node_(node) {
         config_ = Config::GetInstance();
-        if (config_->global_use_rdma) {
-            buffer_ = new char[config_->buffer_sz];
-            memset(buffer_, 0, config_->buffer_sz);
-            config_->kvstore = buffer_ + config_->kvstore_offset;
-            config_->send_buf = buffer_ + config_->send_buffer_offset;
-            config_->recv_buf = buffer_ + config_->recv_buffer_offset;
-            config_->local_head_buf = buffer_ + config_->local_head_buffer_offset;
-            config_->remote_head_buf = buffer_ + config_->remote_head_buffer_offset;
-        } else {
-            buffer_ = new char[config_->kvstore_sz];
-            memset(buffer_, 0, config_->kvstore_sz);
-            config_->kvstore = buffer_ + config_->kvstore_offset;
-        }
+        buffer_ = new char[config_->local_buffer_sz];
+        memset(buffer_, 0, config_->local_buffer_sz);
+        config_->send_buf = buffer_ + config_->send_buffer_offset;
+        config_->recv_buf = buffer_ + config_->recv_buffer_offset;
+        config_->local_head_buf = buffer_ + config_->local_head_buffer_offset;
+        config_->remote_head_buf = buffer_ + config_->remote_head_buffer_offset;
     }
 
     ~Buffer() {
+        std::cout << "Delete buffer" << std::endl;
         delete[] buffer_;
     }
 
@@ -47,8 +41,12 @@ class Buffer {
         return buffer_;
     }
 
-    inline uint64_t GetBufSize() {
-        return config_->buffer_sz;
+    inline uint64_t GetLocalBufSize() {
+        return config_->local_buffer_sz;
+    }
+
+    inline uint64_t GetRemoteBufSize() {
+        return config_->remote_buffer_sz;
     }
 
     inline uint64_t GetVPStoreSize() {
@@ -142,8 +140,8 @@ class Buffer {
     }
 
  private:
-    // layout: (kv-store) | send_buffer | recv_buffer | local_head_buffer | remote_head_buffer
-    char* buffer_;
+    // layout: send_buffer | recv_buffer | local_head_buffer | remote_head_buffer
+    char* buffer_; 
     Config* config_;
     Node & node_;
 };

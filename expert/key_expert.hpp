@@ -15,12 +15,12 @@ Authors: Aaron Li (cjli@cse.cuhk.edu.hk)
 #include "base/predicate.hpp"
 #include "expert/abstract_expert.hpp"
 #include "storage/layout.hpp"
-#include "storage/data_store.hpp"
+#include "storage/metadata.hpp"
 #include "utils/tool.hpp"
 
 class KeyExpert : public AbstractExpert {
  public:
-    KeyExpert(int id, DataStore* data_store, int num_thread, AbstractMailbox * mailbox, CoreAffinity * core_affinity) : AbstractExpert(id, data_store, core_affinity), num_thread_(num_thread), mailbox_(mailbox), type_(EXPERT_T::KEY) {}
+    KeyExpert(int id, MetaData* metadata, int num_thread, AbstractMailbox * mailbox, CoreAffinity * core_affinity) : AbstractExpert(id, metadata, core_affinity), num_thread_(num_thread), mailbox_(mailbox), type_(EXPERT_T::KEY) {}
 
     // Key:
     //         Output all keys of properties of input
@@ -49,7 +49,7 @@ class KeyExpert : public AbstractExpert {
 
         // Create Message
         vector<Message> msg_vec;
-        msg.CreateNextMsg(expert_objs, msg.data, num_thread_, data_store_, core_affinity_, msg_vec);
+        msg.CreateNextMsg(expert_objs, msg.data, num_thread_, metadata_, core_affinity_, msg_vec);
 
         // Send Message
         for (auto& msg : msg_vec) {
@@ -73,10 +73,13 @@ class KeyExpert : public AbstractExpert {
             for (auto & elem : data_pair.second) {
                 vid_t v_id(Tool::value_t2int(elem));
 
-                Vertex* vtx = data_store_->GetVertex(v_id);
-                for (auto & pkey : vtx->vp_list) {
+                Vertex vtx;
+                metadata_->GetVertex(tid, v_id, vtx);
+                vector<label_t> vp_list;
+                metadata_->GetVPList(tid, vtx, vp_list);
+                for (auto & pkey : vp_list) {
                     string keyStr;
-                    data_store_->GetNameFromIndex(Index_T::V_PROPERTY, pkey, keyStr);
+                    metadata_->GetNameFromIndex(Index_T::V_PROPERTY, pkey, keyStr);
 
                     value_t val;
                     Tool::str2str(keyStr, val);
@@ -94,10 +97,14 @@ class KeyExpert : public AbstractExpert {
                 eid_t e_id;
                 uint2eid_t(Tool::value_t2uint64_t(elem), e_id);
 
-                Edge* edge = data_store_->GetEdge(e_id);
-                for (auto & pkey : edge->ep_list) {
+                Edge edge;
+                metadata_->GetEdge(tid, e_id, edge);
+                vector<label_t> ep_list;
+                metadata_->GetEPList(tid, edge, ep_list);
+
+                for (auto & pkey : ep_list) {
                     string keyStr;
-                    data_store_->GetNameFromIndex(Index_T::E_PROPERTY, pkey, keyStr);
+                    metadata_->GetNameFromIndex(Index_T::E_PROPERTY, pkey, keyStr);
 
                     value_t val;
                     Tool::str2str(keyStr, val);

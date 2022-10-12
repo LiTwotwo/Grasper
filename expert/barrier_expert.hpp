@@ -9,7 +9,7 @@ Authors: Aaron Li (cjli@cse.cuhk.edu.hk)
 #include "core/result_collector.hpp"
 #include "expert/abstract_expert.hpp"
 #include "expert/expert_cache.hpp"
-#include "storage/data_store.hpp"
+#include "storage/metadata.hpp"
 #include "utils/mkl_util.hpp"
 #include "utils/tool.hpp"
 
@@ -25,10 +25,11 @@ struct barrier_data_base {
 template<class T = BarrierData::barrier_data_base>
 class BarrierExpertBase :  public AbstractExpert {
     static_assert(std::is_base_of<BarrierData::barrier_data_base, T>::value, "T must derive from barrier_data_base");
+    
+ public:
     using BarrierDataTable = tbb::concurrent_hash_map<mkey_t, T, MkeyHashCompare>;
 
- public:
-    BarrierExpertBase(int id, DataStore* data_store, CoreAffinity* core_affinity) : AbstractExpert(id, data_store, core_affinity) {}
+    BarrierExpertBase(int id, MetaData* metadata, CoreAffinity* core_affinity) : AbstractExpert(id, metadata, core_affinity) {}
 
     void process(const vector<Expert_Object> & experts, Message & msg) {
         int tid = TidMapper::GetInstance()->GetTid();
@@ -104,7 +105,7 @@ class BarrierExpertBase :  public AbstractExpert {
     }
 
     // projection functions from E/V to label or property
-    static bool project_property_edge(int tid, value_t & val, int key, DataStore * datastore, ExpertCache* cache) {
+    static bool project_property_edge(int tid, value_t & val, int key, MetaData * metadata, ExpertCache* cache) {
         eid_t e_id;
         uint2eid_t(Tool::value_t2uint64_t(val), e_id);
 
@@ -113,13 +114,13 @@ class BarrierExpertBase :  public AbstractExpert {
         val.content.clear();
 
         // Try cache
-        if (datastore->EPKeyIsLocal(ep_id) || cache == NULL) {
-            return datastore->GetPropertyForEdge(tid, ep_id, val);
+        if (metadata->EPKeyIsLocal(ep_id) || cache == NULL) {
+            return metadata->GetPropertyForEdge(tid, ep_id, val);
         } else {
             bool found = true;
             if (!cache->get_property_from_cache(ep_id.value(), val)) {
                 // not found in cache
-                found = datastore->GetPropertyForEdge(tid, ep_id, val);
+                found = metadata->GetPropertyForEdge(tid, ep_id, val);
                 if (found) {
                     cache->insert_properties(ep_id.value(), val);
                 }
@@ -128,20 +129,20 @@ class BarrierExpertBase :  public AbstractExpert {
         }
     }
 
-    static bool project_property_vertex(int tid, value_t & val, int key, DataStore * datastore, ExpertCache* cache) {
+    static bool project_property_vertex(int tid, value_t & val, int key, MetaData * metadata, ExpertCache* cache) {
         vid_t v_id(Tool::value_t2int(val));
         vpid_t vp_id(v_id, key);
 
         val.content.clear();
 
         // Try cache
-        if (datastore->VPKeyIsLocal(vp_id) || cache == NULL) {
-            return datastore->GetPropertyForVertex(tid, vp_id, val);
+        if (metadata->VPKeyIsLocal(vp_id) || cache == NULL) {
+            return metadata->GetPropertyForVertex(tid, vp_id, val);
         } else {
             bool found = true;
             if (!cache->get_property_from_cache(vp_id.value(), val)) {
                 // not found in cache
-                found = datastore->GetPropertyForVertex(tid, vp_id, val);
+                found = metadata->GetPropertyForVertex(tid, vp_id, val);
                 if (found) {
                     cache->insert_properties(vp_id.value(), val);
                 }
@@ -150,19 +151,19 @@ class BarrierExpertBase :  public AbstractExpert {
         }
     }
 
-    static bool project_label_edge(int tid, value_t & val, int key, DataStore * datastore, ExpertCache* cache) {
+    static bool project_label_edge(int tid, value_t & val, int key, MetaData * metadata, ExpertCache* cache) {
         eid_t e_id;
         uint2eid_t(Tool::value_t2uint64_t(val), e_id);
         val.content.clear();
 
         label_t label;
         bool found;
-        if (datastore->EPKeyIsLocal(epid_t(e_id, 0)) || cache == NULL) {
-            found = datastore->GetLabelForEdge(tid, e_id, label);
+        if (metadata->EPKeyIsLocal(epid_t(e_id, 0)) || cache == NULL) {
+            found = metadata->GetLabelForEdge(tid, e_id, label);
         } else {
             found = true;
             if (!cache->get_label_from_cache(e_id.value(), label)) {
-                found = datastore->GetLabelForEdge(tid, e_id, label);
+                found = metadata->GetLabelForEdge(tid, e_id, label);
                 if (found) {
                     cache->insert_label(e_id.value(), label);
                 }
@@ -171,25 +172,25 @@ class BarrierExpertBase :  public AbstractExpert {
 
         if (found) {
             string label_str;
-            datastore->GetNameFromIndex(Index_T::E_LABEL, label, label_str);
+            metadata->GetNameFromIndex(Index_T::E_LABEL, label, label_str);
             Tool::str2str(label_str, val);
         }
         return found;
     }
 
-    static bool project_label_vertex(int tid, value_t & val, int key, DataStore * datastore, ExpertCache* cache) {
+    static bool project_label_vertex(int tid, value_t & val, int key, MetaData * metadata, ExpertCache* cache) {
         vid_t v_id(Tool::value_t2int(val));
 
         val.content.clear();
 
         label_t label;
         bool found;
-        if (datastore->VPKeyIsLocal(vpid_t(v_id, 0)) || cache == NULL) {
-            found = datastore->GetLabelForVertex(tid, v_id, label);
+        if (metadata->VPKeyIsLocal(vpid_t(v_id, 0)) || cache == NULL) {
+            found = metadata->GetLabelForVertex(tid, v_id, label);
         } else {
             found = true;
             if (!cache->get_label_from_cache(v_id.value(), label)) {
-                found = datastore->GetLabelForVertex(tid, v_id, label);
+                found = metadata->GetLabelForVertex(tid, v_id, label);
                 if (found) {
                     cache->insert_label(v_id.value(), label);
                 }
@@ -198,13 +199,13 @@ class BarrierExpertBase :  public AbstractExpert {
 
         if (found) {
             string label_str;
-            datastore->GetNameFromIndex(Index_T::V_LABEL, label, label_str);
+            metadata->GetNameFromIndex(Index_T::V_LABEL, label, label_str);
             Tool::str2str(label_str, val);
         }
         return found;
     }
 
-    static bool project_none(int tid, value_t & val, int key, DataStore * datastore, ExpertCache* cache) {
+    static bool project_none(int tid, value_t & val, int key, MetaData * metadata, ExpertCache* cache) {
         return true;
     }
 
@@ -270,14 +271,14 @@ struct end_data : barrier_data_base {
 
 class EndExpert : public BarrierExpertBase<BarrierData::end_data> {
  public:
-    EndExpert(int id, DataStore* data_store, int num_nodes, Result_Collector * rc, AbstractMailbox * mailbox, CoreAffinity* core_affinity) : BarrierExpertBase<BarrierData::end_data>(id, data_store, core_affinity), num_nodes_(num_nodes), rc_(rc), mailbox_(mailbox) {}
+    EndExpert(int id, MetaData* metadata, int num_nodes, Result_Collector * rc, AbstractMailbox * mailbox, CoreAffinity* core_affinity) : BarrierExpertBase<BarrierData::end_data>(id, metadata, core_affinity), num_nodes_(num_nodes), rc_(rc), mailbox_(mailbox) {}
 
  private:
     Result_Collector * rc_;
     AbstractMailbox * mailbox_;
     int num_nodes_;
 
-    void do_work(int tid, const vector<Expert_Object> & experts, Message & msg, BarrierDataTable::accessor& ac, bool isReady) {
+    void do_work(int tid, const vector<Expert_Object> & experts, Message & msg, BarrierExpertBase::BarrierDataTable::accessor& ac, bool isReady) {
         #ifdef EXPERT_PROCESS_PRINT
         Node node = Node::StaticInstance();
         printf("%f, EXPERT = %s, %s, msg.meta.step = %d, node = %d, tid = %d\n", node.WtimeSinceStart(), "EndExpert::do_work", experts[msg.meta.step].DebugString().c_str(), msg.meta.step, node.get_local_rank(), tid);
@@ -313,7 +314,7 @@ struct agg_data : barrier_data_base {
 
 class AggregateExpert : public BarrierExpertBase<BarrierData::agg_data> {
  public:
-    AggregateExpert(int id, DataStore* data_store, int num_nodes, int num_thread, AbstractMailbox * mailbox, CoreAffinity* core_affinity) : BarrierExpertBase<BarrierData::agg_data>(id, data_store, core_affinity), num_nodes_(num_nodes), num_thread_(num_thread), mailbox_(mailbox) {}
+    AggregateExpert(int id, MetaData* metadata, int num_nodes, int num_thread, AbstractMailbox * mailbox, CoreAffinity* core_affinity) : BarrierExpertBase<BarrierData::agg_data>(id, metadata, core_affinity), num_nodes_(num_nodes), num_thread_(num_thread), mailbox_(mailbox) {}
 
  private:
     int num_nodes_;
@@ -343,7 +344,7 @@ class AggregateExpert : public BarrierExpertBase<BarrierData::agg_data> {
             int key = Tool::value_t2int(expert.params[0]);
 
             // insert to current node's storage
-            data_store_->InsertAggData(agg_t(msg.meta.qid, key), agg_data);
+            metadata_->InsertAggData(agg_t(msg.meta.qid, key), agg_data);
 
             vector<Message> v;
             // send aggregated data to other nodes
@@ -353,7 +354,7 @@ class AggregateExpert : public BarrierExpertBase<BarrierData::agg_data> {
                 msg.data = move(msg_data);
             } else {
                 // send input data and history to next expert
-                msg.CreateNextMsg(experts, msg_data, num_thread_, data_store_, core_affinity_, v);
+                msg.CreateNextMsg(experts, msg_data, num_thread_, metadata_, core_affinity_, v);
             }
 
             for (auto& m : v) {
@@ -365,7 +366,7 @@ class AggregateExpert : public BarrierExpertBase<BarrierData::agg_data> {
 
 class CapExpert : public BarrierExpertBase<> {
  public:
-    CapExpert(int id, DataStore* data_store, int num_thread, AbstractMailbox * mailbox, CoreAffinity* core_affinity) : BarrierExpertBase<>(id, data_store, core_affinity), num_thread_(num_thread), mailbox_(mailbox) {}
+    CapExpert(int id, MetaData* metadata, int num_thread, AbstractMailbox * mailbox, CoreAffinity* core_affinity) : BarrierExpertBase<>(id, metadata, core_affinity), num_thread_(num_thread), mailbox_(mailbox) {}
 
  private:
     int num_thread_;
@@ -389,7 +390,7 @@ class CapExpert : public BarrierExpertBase<> {
                 int se_key = Tool::value_t2int(expert.params.at(i));
                 string se_string = Tool::value_t2string(expert.params.at(i+1));
                 vector<value_t> vec;
-                data_store_->GetAggData(agg_t(msg.meta.qid, se_key), vec);
+                metadata_->GetAggData(agg_t(msg.meta.qid, se_key), vec);
 
                 string temp = se_string + ":[";
                 for (auto& val : vec) {
@@ -420,7 +421,7 @@ class CapExpert : public BarrierExpertBase<> {
                 msg.data = move(msg_data);
             } else {
                 vector<Message> v;
-                msg.CreateNextMsg(experts, msg_data, num_thread_, data_store_, core_affinity_, v);
+                msg.CreateNextMsg(experts, msg_data, num_thread_, metadata_, core_affinity_, v);
                 for (auto& m : v) {
                     mailbox_->Send(tid, m);
                 }
@@ -441,7 +442,7 @@ struct count_data : barrier_data_base {
 
 class CountExpert : public BarrierExpertBase<BarrierData::count_data> {
  public:
-    CountExpert(int id, DataStore* data_store, int num_thread, AbstractMailbox * mailbox, CoreAffinity* core_affinity) : BarrierExpertBase<BarrierData::count_data>(id, data_store, core_affinity), num_thread_(num_thread), mailbox_(mailbox) {}
+    CountExpert(int id, MetaData* metadata, int num_thread, AbstractMailbox * mailbox, CoreAffinity* core_affinity) : BarrierExpertBase<BarrierData::count_data>(id, metadata, core_affinity), num_thread_(num_thread), mailbox_(mailbox) {}
 
  private:
     int num_thread_;
@@ -480,7 +481,7 @@ class CountExpert : public BarrierExpertBase<BarrierData::count_data> {
                 msg.data = move(msg_data);
             } else {
                 vector<Message> v;
-                msg.CreateNextMsg(experts, msg_data, num_thread_, data_store_, core_affinity_, v);
+                msg.CreateNextMsg(experts, msg_data, num_thread_, metadata_, core_affinity_, v);
                 for (auto& m : v) {
                     mailbox_->Send(tid, m);
                 }
@@ -501,7 +502,7 @@ struct dedup_data : barrier_data_base {
 
 class DedupExpert : public BarrierExpertBase<BarrierData::dedup_data> {
  public:
-    DedupExpert(int id, DataStore* data_store, int num_thread, AbstractMailbox * mailbox, CoreAffinity* core_affinity) : BarrierExpertBase<BarrierData::dedup_data>(id, data_store, core_affinity), num_thread_(num_thread), mailbox_(mailbox) {}
+    DedupExpert(int id, MetaData* metadata, int num_thread, AbstractMailbox * mailbox, CoreAffinity* core_affinity) : BarrierExpertBase<BarrierData::dedup_data>(id, metadata, core_affinity), num_thread_(num_thread), mailbox_(mailbox) {}
 
  private:
     int num_thread_;
@@ -583,7 +584,7 @@ class DedupExpert : public BarrierExpertBase<BarrierData::dedup_data> {
                 msg.data = move(msg_data);
             } else {
                 vector<Message> v;
-                msg.CreateNextMsg(experts, msg_data, num_thread_, data_store_, core_affinity_, v);
+                msg.CreateNextMsg(experts, msg_data, num_thread_, metadata_, core_affinity_, v);
                 for (auto& m : v) {
                     mailbox_->Send(tid, m);
                 }
@@ -604,7 +605,7 @@ struct group_data : barrier_data_base {
 
 class GroupExpert : public BarrierExpertBase<BarrierData::group_data> {
  public:
-    GroupExpert(int id, DataStore* data_store, int num_thread, AbstractMailbox * mailbox, CoreAffinity* core_affinity) : BarrierExpertBase<BarrierData::group_data>(id, data_store, core_affinity), num_thread_(num_thread), mailbox_(mailbox) {
+    GroupExpert(int id, MetaData* metadata, int num_thread, AbstractMailbox * mailbox, CoreAffinity* core_affinity) : BarrierExpertBase<BarrierData::group_data>(id, metadata, core_affinity), num_thread_(num_thread), mailbox_(mailbox) {
         config_ = Config::GetInstance();
     }
 
@@ -627,8 +628,8 @@ class GroupExpert : public BarrierExpertBase<BarrierData::group_data> {
         int valueProjection = Tool::value_t2int(expert.params[3]);
 
         // get projection function by expert params
-        bool(*kp)(int, value_t&, int, DataStore*, ExpertCache*) = project_none;
-        bool(*vp)(int, value_t&, int, DataStore*, ExpertCache*) = project_none;
+        bool(*kp)(int, value_t&, int, MetaData*, ExpertCache*) = project_none;
+        bool(*vp)(int, value_t&, int, MetaData*, ExpertCache*) = project_none;
         if (keyProjection == 0) {
             kp = (element_type == Element_T::VERTEX) ? project_label_vertex : project_label_edge;
         } else if (keyProjection > 0) {
@@ -660,10 +661,10 @@ class GroupExpert : public BarrierExpertBase<BarrierData::group_data> {
             for (auto& val : p.second) {
                 value_t k = val;
                 value_t v = val;
-                if (!kp(tid, k, keyProjection, data_store_, cache)) {
+                if (!kp(tid, k, keyProjection, metadata_, cache)) {
                     continue;
                 }
-                if (!vp(tid, v, valueProjection, data_store_, cache)) {
+                if (!vp(tid, v, valueProjection, metadata_, cache)) {
                     continue;
                 }
                 string key = Tool::DebugString(k);
@@ -720,7 +721,7 @@ class GroupExpert : public BarrierExpertBase<BarrierData::group_data> {
                 msg.data = move(msg_data);
             } else {
                 vector<Message> v;
-                msg.CreateNextMsg(experts, msg_data, num_thread_, data_store_, core_affinity_, v);
+                msg.CreateNextMsg(experts, msg_data, num_thread_, metadata_, core_affinity_, v);
                 for (auto& m : v) {
                     mailbox_->Send(tid, m);
                 }
@@ -744,7 +745,7 @@ struct order_data : barrier_data_base {
 
 class OrderExpert : public BarrierExpertBase<BarrierData::order_data> {
  public:
-    OrderExpert(int id, DataStore* data_store, int num_thread, AbstractMailbox * mailbox, CoreAffinity* core_affinity) : BarrierExpertBase<BarrierData::order_data>(id, data_store, core_affinity), num_thread_(num_thread), mailbox_(mailbox) {
+    OrderExpert(int id, MetaData* metadata, int num_thread, AbstractMailbox * mailbox, CoreAffinity* core_affinity) : BarrierExpertBase<BarrierData::order_data>(id, metadata, core_affinity), num_thread_(num_thread), mailbox_(mailbox) {
         config_ = Config::GetInstance();
     }
 
@@ -767,7 +768,7 @@ class OrderExpert : public BarrierExpertBase<BarrierData::order_data> {
         int keyProjection = Tool::value_t2int(expert.params[1]);
 
         // get projection function by expert params
-        bool(*kp)(int, value_t&, int, DataStore*, ExpertCache*) = project_none;
+        bool(*kp)(int, value_t&, int, MetaData*, ExpertCache*) = project_none;
         if (keyProjection == 0) {
             kp = (element_type == Element_T::VERTEX) ? project_label_vertex : project_label_edge;
         } else if (keyProjection > 0) {
@@ -804,7 +805,7 @@ class OrderExpert : public BarrierExpertBase<BarrierData::order_data> {
 
                 for (auto& val : p.second) {
                     value_t key = val;
-                    if (!kp(tid, key, keyProjection, data_store_, cache)) {
+                    if (!kp(tid, key, keyProjection, metadata_, cache)) {
                         continue;
                     }
                     map_[key].insert(move(val));
@@ -848,7 +849,7 @@ class OrderExpert : public BarrierExpertBase<BarrierData::order_data> {
                 msg.data = move(msg_data);
             } else {
                 vector<Message> v;
-                msg.CreateNextMsg(experts, msg_data, num_thread_, data_store_, core_affinity_, v);
+                msg.CreateNextMsg(experts, msg_data, num_thread_, metadata_, core_affinity_, v);
                 for (auto& m : v) {
                     mailbox_->Send(tid, m);
                 }
@@ -869,7 +870,7 @@ struct range_data : barrier_data_base {
 
 class RangeExpert : public BarrierExpertBase<BarrierData::range_data> {
  public:
-    RangeExpert(int id, DataStore* data_store, int num_thread, AbstractMailbox * mailbox, CoreAffinity* core_affinity) : BarrierExpertBase<BarrierData::range_data>(id, data_store, core_affinity), num_thread_(num_thread), mailbox_(mailbox) {}
+    RangeExpert(int id, MetaData* metadata, int num_thread, AbstractMailbox * mailbox, CoreAffinity* core_affinity) : BarrierExpertBase<BarrierData::range_data>(id, metadata, core_affinity), num_thread_(num_thread), mailbox_(mailbox) {}
 
  private:
     int num_thread_;
@@ -948,7 +949,7 @@ class RangeExpert : public BarrierExpertBase<BarrierData::range_data> {
                 msg.data = move(msg_data);
             } else {
                 vector<Message> v;
-                msg.CreateNextMsg(experts, msg_data, num_thread_, data_store_, core_affinity_, v);
+                msg.CreateNextMsg(experts, msg_data, num_thread_, metadata_, core_affinity_, v);
                 for (auto& m : v) {
                     mailbox_->Send(tid, m);
                 }
@@ -959,7 +960,7 @@ class RangeExpert : public BarrierExpertBase<BarrierData::range_data> {
 
 class CoinExpert : public BarrierExpertBase<BarrierData::range_data> {
  public:
-    CoinExpert(int id, DataStore* data_store, int num_thread, AbstractMailbox * mailbox, CoreAffinity* core_affinity) : BarrierExpertBase<BarrierData::range_data>(id, data_store, core_affinity), num_thread_(num_thread), mailbox_(mailbox) {}
+    CoinExpert(int id, MetaData* metadata, int num_thread, AbstractMailbox * mailbox, CoreAffinity* core_affinity) : BarrierExpertBase<BarrierData::range_data>(id, metadata, core_affinity), num_thread_(num_thread), mailbox_(mailbox) {}
 
  private:
     int num_thread_;
@@ -1035,7 +1036,7 @@ class CoinExpert : public BarrierExpertBase<BarrierData::range_data> {
                 msg.data = move(msg_data);
             } else {
                 vector<Message> v;
-                msg.CreateNextMsg(experts, msg_data, num_thread_, data_store_, core_affinity_, v);
+                msg.CreateNextMsg(experts, msg_data, num_thread_, metadata_, core_affinity_, v);
                 for (auto& m : v) {
                     mailbox_->Send(tid, m);
                 }
@@ -1060,7 +1061,7 @@ struct math_data : barrier_data_base {
 
 class MathExpert : public BarrierExpertBase<BarrierData::math_data> {
  public:
-    MathExpert(int id, DataStore* data_store, int num_thread, AbstractMailbox * mailbox, CoreAffinity* core_affinity) : BarrierExpertBase<BarrierData::math_data>(id, data_store, core_affinity), num_thread_(num_thread), mailbox_(mailbox) {}
+    MathExpert(int id, MetaData* metadata, int num_thread, AbstractMailbox * mailbox, CoreAffinity* core_affinity) : BarrierExpertBase<BarrierData::math_data>(id, metadata, core_affinity), num_thread_(num_thread), mailbox_(mailbox) {}
 
  private:
     int num_thread_;
@@ -1119,7 +1120,7 @@ class MathExpert : public BarrierExpertBase<BarrierData::math_data> {
                 msg.data = move(msg_data);
             } else {
                 vector<Message> v;
-                msg.CreateNextMsg(experts, msg_data, num_thread_, data_store_, core_affinity_, v);
+                msg.CreateNextMsg(experts, msg_data, num_thread_, metadata_, core_affinity_, v);
                 for (auto& m : v) {
                     mailbox_->Send(tid, m);
                 }

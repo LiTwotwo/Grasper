@@ -9,6 +9,7 @@ file(GLOB base-src-files
     communication.cpp
     client_connection.cpp
     predicate.cpp
+    qp_manager.cpp
     )
 
 add_library(base-objs OBJECT ${base-src-files})

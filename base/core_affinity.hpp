@@ -42,6 +42,7 @@ using namespace std;
 class CoreAffinity {
  public:
     CoreAffinity() {
+        std::cout << "In constructor" << std::endl;
         config_ = Config::GetInstance();
     }
 
@@ -56,6 +57,7 @@ class CoreAffinity {
         // Fail when number of threads < 6
         if (!get_num_thread_for_each_division(config_->global_num_threads)) {
             config_->global_enable_expert_division = false;
+            return;
         }
 
         // Assign thread id to each division according to last function

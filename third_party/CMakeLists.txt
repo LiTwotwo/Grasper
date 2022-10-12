@@ -1,1 +1,1 @@
-add_subdirectory(rdmalib)
+add_subdirectory(rlib)

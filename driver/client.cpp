@@ -16,6 +16,7 @@ void Client::Init() {
     nodes_ = ParseFile(fname_);
     CHECK(CheckUniquePort(nodes_));
     master_ = GetNodeById(nodes_, 0);
+    nodes_.pop_back();
     cc_.Init(nodes_);
 }
 

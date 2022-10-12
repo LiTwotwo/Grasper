@@ -9,8 +9,8 @@ Authors: Nick Fang (jcfang6@cse.cuhk.edu.hk)
 
 #include "core/parser.hpp"
 
-void Parser::LoadMapping(DataStore* data_store) {
-    indexes_ = &(data_store->indexes);
+void Parser::LoadMapping(MetaData* metadata) {
+    indexes_ = &(metadata->indexes);
 
     // these *_str will be used when given error key in a query (return to the client as error message)
     for (auto vpk_pair : indexes_->str2vpk) {
@@ -21,12 +21,10 @@ void Parser::LoadMapping(DataStore* data_store) {
         epks.push_back(epk_pair.first);
         epks_str += epk_pair.first + " ";
     }
-
     for (auto vlk_pair : indexes_->str2vl) {
         vlks.push_back(vlk_pair.first);
         vlks_str += vlk_pair.first + " ";
     }
-
     for (auto elk_pair : indexes_->str2el) {
         elks.push_back(elk_pair.first);
         elks_str += elk_pair.first + " ";
@@ -135,7 +133,7 @@ void Parser::SplitParam(string& param, vector<string>& params) {
             p = "";
         }
     }
-    return params;
+    // return params;
 }
 
 void Parser::SplitPredicate(string& param, Predicate_T& pred_type, vector<string>& pred_params) {
@@ -155,7 +153,7 @@ void Parser::SplitPredicate(string& param, Predicate_T& pred_type, vector<string
     } else {
         throw ParserException("unexpected predicate: " + param);
     }
-    return pred_params;
+    // return pred_params;
 }
 
 bool Parser::IsNumber() {

@@ -76,8 +76,8 @@ class MPISnapshot {
     map<string, bool> write_map_;
 
     // by default, it is enabled
-    bool read_enabled_ = true;
-    bool write_enabled_ = true;
+    bool read_enabled_ = false;
+    bool write_enabled_ = false;
 
     MPISnapshot(string path);
 

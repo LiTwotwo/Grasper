@@ -15,12 +15,12 @@ Authors: Aaron Li (cjli@cse.cuhk.edu.hk)
 #include "base/predicate.hpp"
 #include "expert/abstract_expert.hpp"
 #include "storage/layout.hpp"
-#include "storage/data_store.hpp"
+#include "storage/metadata.hpp"
 #include "utils/tool.hpp"
 
 class WhereExpert : public AbstractExpert {
  public:
-    WhereExpert(int id, DataStore * data_store, int num_thread, AbstractMailbox * mailbox, CoreAffinity * core_affinity) : AbstractExpert(id, data_store, core_affinity), num_thread_(num_thread), mailbox_(mailbox), type_(EXPERT_T::WHERE) {}
+    WhereExpert(int id, MetaData * metadata, int num_thread, AbstractMailbox * mailbox, CoreAffinity * core_affinity) : AbstractExpert(id, metadata, core_affinity), num_thread_(num_thread), mailbox_(mailbox), type_(EXPERT_T::WHERE) {}
 
     // Where:
     // [    label_step_key:  int
@@ -91,7 +91,7 @@ class WhereExpert : public AbstractExpert {
 
         // Create Message
         vector<Message> msg_vec;
-        msg.CreateNextMsg(expert_objs, msg.data, num_thread_, data_store_, core_affinity_, msg_vec);
+        msg.CreateNextMsg(expert_objs, msg.data, num_thread_, metadata_, core_affinity_, msg_vec);
 
         // Send Message
         for (auto& msg : msg_vec) {
@@ -198,7 +198,7 @@ class WhereExpert : public AbstractExpert {
     }
 
     bool HasAggregateData(agg_t key, vector<value_t> & agg_data) {
-        data_store_->GetAggData(key, agg_data);
+        metadata_->GetAggData(key, agg_data);
 
         if (agg_data.size() == 0) {
             return false;

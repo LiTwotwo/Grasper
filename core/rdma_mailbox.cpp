@@ -6,9 +6,9 @@ Authors: Hongzhi Chen (hzchen@cse.cuhk.edu.hk)
 
 #include "core/rdma_mailbox.hpp"
 
-void RdmaMailbox::Init(vector<Node> & nodes) {
-    // Init RDMA
-    RDMA_init(node_.get_local_size(), config_->global_num_threads + 1, node_.get_local_rank(), buffer_->GetBuf(), buffer_->GetBufSize(), nodes);
+void RdmaMailbox::Init(vector<Node> & nodes, Node & remote) {
+    // Init RDMA include connection between other workers and remote servers
+    RDMA_init(node_.get_local_size(), config_->global_num_threads + 1, node_.get_local_rank(), buffer_->GetBuf(), buffer_->GetLocalBufSize(), nodes, remote);
 
     int nrbfs = (config_->global_num_workers - 1) * config_->global_num_threads;
 
@@ -81,7 +81,7 @@ int RdmaMailbox::Send(int tid, const Message & msg) {
     }
 }
 
-bool RdmaMailbox::SendData(int tid, const mailbox_data_t& data) {
+bool RdmaMailbox::SendData(int tid, mailbox_data_t& data) {
     // Send data to remote machine only
     int dst_nid = data.dst_nid;
     int dst_tid = data.dst_tid;
@@ -139,7 +139,6 @@ void RdmaMailbox::Recv(int tid, Message & msg) {
         }
     }
 }
-
 
 bool RdmaMailbox::TryRecv(int tid, Message & msg) {
     pthread_spin_lock(&recv_locks[tid]);

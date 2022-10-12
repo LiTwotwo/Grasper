@@ -163,7 +163,7 @@ class Parser {
     int GetPid(Element_T type, string& property);
 
     // load property and label mapping
-    void LoadMapping(DataStore* data_store);
+    void LoadMapping(MetaData* metadata);
 
     // parsing exception
     struct ParserException {

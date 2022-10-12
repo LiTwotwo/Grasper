@@ -126,7 +126,7 @@ void Message::CreateExitMsg(int nodes_num, vector<Message>& vec) {
 }
 
 
-void Message::CreateNextMsg(const vector<Expert_Object>& experts, vector<pair<history_t, vector<value_t>>>& data, int num_thread, DataStore* data_store, CoreAffinity* core_affinity, vector<Message>& vec) {
+void Message::CreateNextMsg(const vector<Expert_Object>& experts, vector<pair<history_t, vector<value_t>>>& data, int num_thread, MetaData* data_store, CoreAffinity* core_affinity, vector<Message>& vec) {
     // timer::start_timer(meta.recver_tid + 4 * num_thread);
     Meta m = this->meta;
     m.step = experts[this->meta.step].next_expert;
@@ -146,7 +146,7 @@ void Message::CreateNextMsg(const vector<Expert_Object>& experts, vector<pair<hi
     // timer::stop_timer(meta.recver_tid + 4 * num_thread);
 }
 
-void Message::CreateBranchedMsg(const vector<Expert_Object>& experts, vector<int>& steps, int num_thread, DataStore* data_store, CoreAffinity * core_affinity, vector<Message>& vec) {
+void Message::CreateBranchedMsg(const vector<Expert_Object>& experts, vector<int>& steps, int num_thread, MetaData* data_store, CoreAffinity * core_affinity, vector<Message>& vec) {
     // timer::start_timer(meta.recver_tid + 4 * num_thread);
     Meta m = this->meta;
 
@@ -211,7 +211,7 @@ void Message::CreateBranchedMsg(const vector<Expert_Object>& experts, vector<int
     // timer::stop_timer(meta.recver_tid + 4 * num_thread);
 }
 
-void Message::CreateBranchedMsgWithHisLabel(const vector<Expert_Object>& experts, vector<int>& steps, uint64_t msg_id, int num_thread, DataStore* data_store, CoreAffinity * core_affinity, vector<Message>& vec) {
+void Message::CreateBranchedMsgWithHisLabel(const vector<Expert_Object>& experts, vector<int>& steps, uint64_t msg_id, int num_thread, MetaData* data_store, CoreAffinity * core_affinity, vector<Message>& vec) {
     // timer::start_timer(meta.recver_tid + 4 * num_thread);
     Meta m = this->meta;
 
@@ -288,7 +288,7 @@ void Message::CreateFeedMsg(int key, int nodes_num, vector<value_t>& data, vecto
     }
 }
 
-void Message::dispatch_data(Meta& m, const vector<Expert_Object>& experts, vector<pair<history_t, vector<value_t>>>& data, int num_thread, DataStore* data_store, CoreAffinity * core_affinity, vector<Message>& vec) {
+void Message::dispatch_data(Meta& m, const vector<Expert_Object>& experts, vector<pair<history_t, vector<value_t>>>& data, int num_thread, MetaData* data_store, CoreAffinity * core_affinity, vector<Message>& vec) {
     Meta cm = m;
     bool route_assigned = update_route(m, experts);
     bool empty_to_barrier = update_collection_route(cm, experts);
@@ -448,7 +448,7 @@ bool Message::update_collection_route(Meta& m, const vector<Expert_Object>& expe
     return to_barrier;
 }
 
-int Message::get_node_id(value_t & v, DataStore* data_store) {
+int Message::get_node_id(value_t & v, MetaData* data_store) {
     int type = v.type;
     if (type == 1) {
         vid_t v_id(Tool::value_t2int(v));

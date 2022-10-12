@@ -17,7 +17,7 @@ Authors: Hongzhi Chen (hzchen@cse.cuhk.edu.hk)
 #include "base/serialization.hpp"
 #include "base/type.hpp"
 #include "core/expert_object.hpp"
-#include "storage/data_store.hpp"
+#include "storage/metadata.hpp"
 
 #define TEN_MB 1048576
 
@@ -126,18 +126,18 @@ class Message {
     // data:    new data processed by expert_type
     // vec:     messages to be send
     // mapper:  function that maps value_t to particular machine, default NULL
-    void CreateNextMsg(const vector<Expert_Object>& experts, vector<pair<history_t, vector<value_t>>>& data, int num_thread, DataStore* data_store, CoreAffinity* core_affinity, vector<Message>& vec);
+    void CreateNextMsg(const vector<Expert_Object>& experts, vector<pair<history_t, vector<value_t>>>& data, int num_thread, MetaData* metadata, CoreAffinity* core_affinity, vector<Message>& vec);
 
     // experts:  experts chain for current message
     // stpes:   branching steps
     // vec:     messages to be send
-    void CreateBranchedMsg(const vector<Expert_Object>& experts, vector<int>& steps, int num_thread, DataStore* data_store, CoreAffinity* core_affinity, vector<Message>& vec);
+    void CreateBranchedMsg(const vector<Expert_Object>& experts, vector<int>& steps, int num_thread, MetaData* metadata, CoreAffinity* core_affinity, vector<Message>& vec);
 
     // experts:  experts chain for current message
     // stpes:   branching steps
     // msg_id:  assigned by expert to indicate parent msg
     // vec:     messages to be send
-    void CreateBranchedMsgWithHisLabel(const vector<Expert_Object>& experts, vector<int>& steps, uint64_t msg_id, int num_thread, DataStore* data_store, CoreAffinity* core_affinity, vector<Message>& vec);
+    void CreateBranchedMsgWithHisLabel(const vector<Expert_Object>& experts, vector<int>& steps, uint64_t msg_id, int num_thread, MetaData* metadata, CoreAffinity* core_affinity, vector<Message>& vec);
 
     // create Feed msg
     // Feed data to all node with tid = parent_tid
@@ -147,13 +147,13 @@ class Message {
 
  private:
     // dispatch input data to different node
-    void dispatch_data(Meta& m, const vector<Expert_Object>& experts, vector<pair<history_t, vector<value_t>>>& data, int num_thread, DataStore* data_store, CoreAffinity * core_affinity, vector<Message>& vec);
+    void dispatch_data(Meta& m, const vector<Expert_Object>& experts, vector<pair<history_t, vector<value_t>>>& data, int num_thread, MetaData* metadata, CoreAffinity * core_affinity, vector<Message>& vec);
     // update route to next expert
     bool update_route(Meta& m, const vector<Expert_Object>& experts);
     // update route to barrier or labelled branch experts for msg collection
     bool update_collection_route(Meta& m, const vector<Expert_Object>& experts);
     // get the node where vertex or edge is stored
-    static int get_node_id(value_t & v, DataStore* data_store);
+    static int get_node_id(value_t & v, MetaData* metadata);
 };
 
 ibinstream& operator<<(ibinstream& m, const Message& msg);

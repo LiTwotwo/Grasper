@@ -6,6 +6,11 @@ file(GLOB store-src-files
     ekvstore.cpp
     vkvstore.cpp
     mpi_snapshot.cpp
+    vertex.cpp
+    edge.cpp
+    metadata.cpp
+    vkvstore_local.cpp
+    ekvstore_local.cpp
     )
 
 add_library(store-objs OBJECT ${store-src-files})

@@ -20,7 +20,7 @@ Authors: Nick Fang (jcfang6@cse.cuhk.edu.hk)
 #include "base/predicate.hpp"
 #include "expert/abstract_expert.hpp"
 #include "storage/layout.hpp"
-#include "storage/data_store.hpp"
+#include "storage/metadata.hpp"
 #include "utils/tool.hpp"
 #include "utils/timer.hpp"
 
@@ -32,7 +32,7 @@ using namespace std;
 
 class InitExpert : public AbstractExpert {
  public:
-    InitExpert(int id, DataStore* data_store, int num_thread, AbstractMailbox * mailbox, CoreAffinity* core_affinity, IndexStore * index_store, int num_nodes) : AbstractExpert(id, data_store, core_affinity), index_store_(index_store), num_thread_(num_thread), mailbox_(mailbox), num_nodes_(num_nodes), type_(EXPERT_T::INIT), is_ready_(false) {
+    InitExpert(int id, MetaData* metadata, int num_thread, AbstractMailbox * mailbox, CoreAffinity* core_affinity, IndexStore * index_store, int num_nodes) : AbstractExpert(id, metadata, core_affinity), index_store_(index_store), num_thread_(num_thread), mailbox_(mailbox), num_nodes_(num_nodes), type_(EXPERT_T::INIT), is_ready_(false) {
         config_ = Config::GetInstance();
 
         // read snapshot here
@@ -125,8 +125,10 @@ class InitExpert : public AbstractExpert {
     }
 
     void InitVtxData(Meta& m) {
+        int tid = TidMapper::GetInstance()->GetTid();
+
         vector<vid_t> vid_list;
-        data_store_->GetAllVertices(vid_list);
+        metadata_->GetAllVertices(tid, vid_list);
         uint64_t count = vid_list.size();
 
         vector<pair<history_t, vector<value_t>>> data;
@@ -161,8 +163,10 @@ class InitExpert : public AbstractExpert {
     }
 
     void InitEdgeData(Meta& m) {
+        int tid = TidMapper::GetInstance()->GetTid();
+
         vector<eid_t> eid_list;
-        data_store_->GetAllEdges(eid_list);
+        metadata_->GetAllEdges(tid, eid_list);
         uint64_t count = eid_list.size();
 
         vector<pair<history_t, vector<value_t>>> data;
@@ -225,7 +229,7 @@ class InitExpert : public AbstractExpert {
         index_store_->GetElements(inType, pred_chain, msg.data[0].second);
 
         vector<Message> vec;
-        msg.CreateNextMsg(expert_objs, msg.data, num_thread_, data_store_, core_affinity_, vec);
+        msg.CreateNextMsg(expert_objs, msg.data, num_thread_, metadata_, core_affinity_, vec);
 
         // Send Message
         for (auto& msg_ : vec) {

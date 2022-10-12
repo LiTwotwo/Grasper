@@ -14,7 +14,7 @@ Authors: Nick Fang (jcfang6@cse.cuhk.edu.hk)
 
 class IndexStore {
  public:
-    const static double ratio = 0.2;
+    constexpr static double ratio = 0.2;
 
     IndexStore() {
         config_ = Config::GetInstance();

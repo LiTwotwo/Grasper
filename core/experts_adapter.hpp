@@ -40,7 +40,7 @@ Authors: Hongzhi Chen (hzchen@cse.cuhk.edu.hk)
 #include "core/abstract_mailbox.hpp"
 #include "core/result_collector.hpp"
 #include "core/index_store.hpp"
-#include "storage/data_store.hpp"
+#include "storage/metadata.hpp"
 #include "utils/config.hpp"
 #include "utils/timer.hpp"
 
@@ -52,7 +52,7 @@ using namespace std;
 
 class ExpertAdapter {
  public:
-    ExpertAdapter(Node & node, Result_Collector * rc, AbstractMailbox * mailbox, DataStore* data_store, CoreAffinity* core_affinity, IndexStore * index_store) : node_(node), rc_(rc), mailbox_(mailbox), data_store_(data_store), core_affinity_(core_affinity), index_store_(index_store) {
+    ExpertAdapter(Node & node, Result_Collector * rc, AbstractMailbox * mailbox, MetaData* metadata, CoreAffinity* core_affinity, IndexStore * index_store) : node_(node), rc_(rc), mailbox_(mailbox), metadata_(metadata), core_affinity_(core_affinity), index_store_(index_store) {
         config_ = Config::GetInstance();
         num_thread_ = config_->global_num_threads;
         times_.resize(num_thread_, 0);
@@ -60,33 +60,33 @@ class ExpertAdapter {
 
     void Init() {
         int id = 0;
-        experts_[EXPERT_T::AGGREGATE] = unique_ptr<AbstractExpert>(new AggregateExpert(id ++, data_store_, node_.get_local_size(), num_thread_, mailbox_, core_affinity_));
-        experts_[EXPERT_T::AS] = unique_ptr<AbstractExpert>(new AsExpert(id ++, data_store_, num_thread_, mailbox_, core_affinity_));
-        experts_[EXPERT_T::BRANCH] = unique_ptr<AbstractExpert>(new BranchExpert(id ++, data_store_, num_thread_, mailbox_, core_affinity_));
-        experts_[EXPERT_T::BRANCHFILTER] = unique_ptr<AbstractExpert>(new BranchFilterExpert(id ++, data_store_, num_thread_, mailbox_, core_affinity_, &id_allocator_));
-        experts_[EXPERT_T::CAP] = unique_ptr<AbstractExpert>(new CapExpert(id ++, data_store_ , num_thread_, mailbox_, core_affinity_));
-        experts_[EXPERT_T::CONFIG] = unique_ptr<AbstractExpert>(new ConfigExpert(id ++, data_store_, num_thread_, mailbox_, core_affinity_));
-        experts_[EXPERT_T::COUNT] = unique_ptr<AbstractExpert>(new CountExpert(id ++, data_store_, num_thread_, mailbox_, core_affinity_));
-        experts_[EXPERT_T::DEDUP] = unique_ptr<AbstractExpert>(new DedupExpert(id ++, data_store_, num_thread_, mailbox_, core_affinity_));
-        experts_[EXPERT_T::END] = unique_ptr<AbstractExpert>(new EndExpert(id ++, data_store_, node_.get_local_size(), rc_, mailbox_, core_affinity_));
-        experts_[EXPERT_T::GROUP] = unique_ptr<AbstractExpert>(new GroupExpert(id ++, data_store_, num_thread_, mailbox_, core_affinity_));
-        experts_[EXPERT_T::HAS] = unique_ptr<AbstractExpert>(new HasExpert(id ++, data_store_, node_.get_local_rank(), num_thread_, mailbox_, core_affinity_));
-        experts_[EXPERT_T::HASLABEL] = unique_ptr<AbstractExpert>(new HasLabelExpert(id ++, data_store_, node_.get_local_rank(), num_thread_, mailbox_, core_affinity_));
-        experts_[EXPERT_T::INIT] = unique_ptr<AbstractExpert>(new InitExpert(id ++, data_store_, num_thread_, mailbox_, core_affinity_, index_store_, node_.get_local_size()));
-        experts_[EXPERT_T::INDEX] = unique_ptr<AbstractExpert>(new IndexExpert(id ++, data_store_, num_thread_, mailbox_, core_affinity_, index_store_));
-        experts_[EXPERT_T::IS] = unique_ptr<AbstractExpert>(new IsExpert(id ++, data_store_, num_thread_, mailbox_, core_affinity_));
-        experts_[EXPERT_T::KEY] = unique_ptr<AbstractExpert>(new KeyExpert(id ++, data_store_, num_thread_, mailbox_, core_affinity_));
-        experts_[EXPERT_T::LABEL] = unique_ptr<AbstractExpert>(new LabelExpert(id ++, data_store_, node_.get_local_rank(), num_thread_, mailbox_, core_affinity_));
-        experts_[EXPERT_T::MATH] = unique_ptr<AbstractExpert>(new MathExpert(id ++, data_store_, num_thread_, mailbox_, core_affinity_));
-        experts_[EXPERT_T::ORDER] = unique_ptr<AbstractExpert>(new OrderExpert(id ++, data_store_, num_thread_, mailbox_, core_affinity_));
-        experts_[EXPERT_T::PROPERTY] = unique_ptr<AbstractExpert>(new PropertiesExpert(id ++, data_store_, node_.get_local_rank(), num_thread_, mailbox_, core_affinity_));
-        experts_[EXPERT_T::RANGE] = unique_ptr<AbstractExpert>(new RangeExpert(id ++, data_store_, num_thread_, mailbox_, core_affinity_));
-        experts_[EXPERT_T::COIN] = unique_ptr<AbstractExpert>(new CoinExpert(id ++, data_store_, num_thread_, mailbox_, core_affinity_));
-        experts_[EXPERT_T::REPEAT] = unique_ptr<AbstractExpert>(new RepeatExpert(id ++, data_store_, num_thread_, mailbox_, core_affinity_));
-        experts_[EXPERT_T::SELECT] = unique_ptr<AbstractExpert>(new SelectExpert(id ++, data_store_, num_thread_, mailbox_, core_affinity_));
-        experts_[EXPERT_T::TRAVERSAL] = unique_ptr<AbstractExpert>(new TraversalExpert(id ++, data_store_, num_thread_, mailbox_, core_affinity_));
-        experts_[EXPERT_T::VALUES] = unique_ptr<AbstractExpert>(new ValuesExpert(id ++, data_store_, node_.get_local_rank(), num_thread_, mailbox_, core_affinity_));
-        experts_[EXPERT_T::WHERE] = unique_ptr<AbstractExpert>(new WhereExpert(id ++, data_store_, num_thread_, mailbox_, core_affinity_));
+        experts_[EXPERT_T::AGGREGATE] = unique_ptr<AbstractExpert>(new AggregateExpert(id ++, metadata_, node_.get_local_size(), num_thread_, mailbox_, core_affinity_));
+        experts_[EXPERT_T::AS] = unique_ptr<AbstractExpert>(new AsExpert(id ++, metadata_, num_thread_, mailbox_, core_affinity_));
+        experts_[EXPERT_T::BRANCH] = unique_ptr<AbstractExpert>(new BranchExpert(id ++, metadata_, num_thread_, mailbox_, core_affinity_));
+        experts_[EXPERT_T::BRANCHFILTER] = unique_ptr<AbstractExpert>(new BranchFilterExpert(id ++, metadata_, num_thread_, mailbox_, core_affinity_, &id_allocator_));
+        experts_[EXPERT_T::CAP] = unique_ptr<AbstractExpert>(new CapExpert(id ++, metadata_ , num_thread_, mailbox_, core_affinity_));
+        experts_[EXPERT_T::CONFIG] = unique_ptr<AbstractExpert>(new ConfigExpert(id ++, metadata_, num_thread_, mailbox_, core_affinity_));
+        experts_[EXPERT_T::COUNT] = unique_ptr<AbstractExpert>(new CountExpert(id ++, metadata_, num_thread_, mailbox_, core_affinity_));
+        experts_[EXPERT_T::DEDUP] = unique_ptr<AbstractExpert>(new DedupExpert(id ++, metadata_, num_thread_, mailbox_, core_affinity_));
+        experts_[EXPERT_T::END] = unique_ptr<AbstractExpert>(new EndExpert(id ++, metadata_, node_.get_local_size(), rc_, mailbox_, core_affinity_));
+        experts_[EXPERT_T::GROUP] = unique_ptr<AbstractExpert>(new GroupExpert(id ++, metadata_, num_thread_, mailbox_, core_affinity_));
+        experts_[EXPERT_T::HAS] = unique_ptr<AbstractExpert>(new HasExpert(id ++, metadata_, node_.get_local_rank(), num_thread_, mailbox_, core_affinity_));
+        experts_[EXPERT_T::HASLABEL] = unique_ptr<AbstractExpert>(new HasLabelExpert(id ++, metadata_, node_.get_local_rank(), num_thread_, mailbox_, core_affinity_));
+        experts_[EXPERT_T::INIT] = unique_ptr<AbstractExpert>(new InitExpert(id ++, metadata_, num_thread_, mailbox_, core_affinity_, index_store_, node_.get_local_size()));
+        experts_[EXPERT_T::INDEX] = unique_ptr<AbstractExpert>(new IndexExpert(id ++, metadata_, num_thread_, mailbox_, core_affinity_, index_store_));
+        experts_[EXPERT_T::IS] = unique_ptr<AbstractExpert>(new IsExpert(id ++, metadata_, num_thread_, mailbox_, core_affinity_));
+        experts_[EXPERT_T::KEY] = unique_ptr<AbstractExpert>(new KeyExpert(id ++, metadata_, num_thread_, mailbox_, core_affinity_));
+        experts_[EXPERT_T::LABEL] = unique_ptr<AbstractExpert>(new LabelExpert(id ++, metadata_, node_.get_local_rank(), num_thread_, mailbox_, core_affinity_));
+        experts_[EXPERT_T::MATH] = unique_ptr<AbstractExpert>(new MathExpert(id ++, metadata_, num_thread_, mailbox_, core_affinity_));
+        experts_[EXPERT_T::ORDER] = unique_ptr<AbstractExpert>(new OrderExpert(id ++, metadata_, num_thread_, mailbox_, core_affinity_));
+        experts_[EXPERT_T::PROPERTY] = unique_ptr<AbstractExpert>(new PropertiesExpert(id ++, metadata_, node_.get_local_rank(), num_thread_, mailbox_, core_affinity_));
+        experts_[EXPERT_T::RANGE] = unique_ptr<AbstractExpert>(new RangeExpert(id ++, metadata_, num_thread_, mailbox_, core_affinity_));
+        experts_[EXPERT_T::COIN] = unique_ptr<AbstractExpert>(new CoinExpert(id ++, metadata_, num_thread_, mailbox_, core_affinity_));
+        experts_[EXPERT_T::REPEAT] = unique_ptr<AbstractExpert>(new RepeatExpert(id ++, metadata_, num_thread_, mailbox_, core_affinity_));
+        experts_[EXPERT_T::SELECT] = unique_ptr<AbstractExpert>(new SelectExpert(id ++, metadata_, num_thread_, mailbox_, core_affinity_));
+        experts_[EXPERT_T::TRAVERSAL] = unique_ptr<AbstractExpert>(new TraversalExpert(id ++, metadata_, num_thread_, mailbox_, core_affinity_));
+        experts_[EXPERT_T::VALUES] = unique_ptr<AbstractExpert>(new ValuesExpert(id ++, metadata_, node_.get_local_rank(), num_thread_, mailbox_, core_affinity_));
+        experts_[EXPERT_T::WHERE] = unique_ptr<AbstractExpert>(new WhereExpert(id ++, metadata_, num_thread_, mailbox_, core_affinity_));
         // TODO(future) add more
 
         timer::init_timers((experts_.size() + timer_offset) * num_thread_);
@@ -108,6 +108,7 @@ class ExpertAdapter {
     void execute(int tid, Message & msg) {
         Meta & m = msg.meta;
         if (m.msg_type == MSG_T::INIT) {
+            std::cout << "Here in INIT" << std::endl;
             // acquire write lock for insert
             accessor ac;
             msg_logic_table_.insert(ac, m.qid);
@@ -115,7 +116,7 @@ class ExpertAdapter {
         } else if (m.msg_type == MSG_T::FEED) {
             assert(msg.data.size() == 1);
             agg_t agg_key(m.qid, m.step);
-            data_store_->InsertAggData(agg_key, msg.data[0].second);
+            metadata_->InsertAggData(agg_key, msg.data[0].second);
 
             return;
         } else if (m.msg_type == MSG_T::EXIT) {
@@ -127,7 +128,7 @@ class ExpertAdapter {
             for (auto& act : ac->second) {
                 if (act.expert_type == EXPERT_T::AGGREGATE) {
                     agg_t agg_key(m.qid, i);
-                    data_store_->DeleteAggData(agg_key);
+                    metadata_->DeleteAggData(agg_key);
                 }
                 i++;
             }
@@ -151,11 +152,15 @@ class ExpertAdapter {
         do {
             current_step = msg.meta.step;
             EXPERT_T next_expert = ac->second[current_step].expert_type;
-            // int offset = (experts_[next_expert]->GetExpertId() + timer_offset) * num_thread_;
+            int offset = (experts_[next_expert]->GetExpertId() + timer_offset) * num_thread_;
 
-            // timer::start_timer(tid + offset);
+            timer::start_timer(tid + offset);
+            metadata_->InitCounter();
             experts_[next_expert]->process(ac->second, msg);
-            // timer::stop_timer(tid + offset);
+            timer::stop_timer(tid + offset);
+            if(strcmp(ExpertType[int(next_expert)], "END") != 0)
+                std::cout << "Expert is " << ExpertType[int(next_expert)] << " which consume " << timer::get_timer(tid + offset) * 1000 << "us"<< endl;
+            metadata_->PrintCounter();
         } while (current_step != msg.meta.step);    // process next expert directly if step is modified
     }
 
@@ -217,7 +222,7 @@ class ExpertAdapter {
  private:
     AbstractMailbox * mailbox_;
     Result_Collector * rc_;
-    DataStore * data_store_;
+    MetaData * metadata_;
     IndexStore * index_store_;
     Config * config_;
     CoreAffinity * core_affinity_;

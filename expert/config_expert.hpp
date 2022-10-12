@@ -13,13 +13,13 @@ Authors: Nick Fang (jcfang6@cse.cuhk.edu.hk)
 #include "core/abstract_mailbox.hpp"
 #include "base/type.hpp"
 #include "expert/abstract_expert.hpp"
-#include "storage/data_store.hpp"
+#include "storage/metadata.hpp"
 #include "utils/config.hpp"
 #include "utils/tool.hpp"
 
 class ConfigExpert : public AbstractExpert {
  public:
-    ConfigExpert(int id, DataStore * data_store, int num_thread, AbstractMailbox * mailbox, CoreAffinity* core_affinity) : AbstractExpert(id, data_store, core_affinity), num_thread_(num_thread), mailbox_(mailbox), type_(EXPERT_T::CONFIG) {
+    ConfigExpert(int id, MetaData * metadata, int num_thread, AbstractMailbox * mailbox, CoreAffinity* core_affinity) : AbstractExpert(id, metadata, core_affinity), num_thread_(num_thread), mailbox_(mailbox), type_(EXPERT_T::CONFIG) {
         config_ = Config::GetInstance();
     }
 
@@ -86,7 +86,7 @@ class ConfigExpert : public AbstractExpert {
 
         // Create Message
         vector<Message> msg_vec;
-        msg.CreateNextMsg(expert_objs, msg.data, num_thread_, data_store_, core_affinity_, msg_vec);
+        msg.CreateNextMsg(expert_objs, msg.data, num_thread_, metadata_, core_affinity_, msg_vec);
 
         // Send Message
         for (auto& msg : msg_vec) {

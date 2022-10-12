@@ -29,12 +29,12 @@ Authors: Hongzhi Chen (hzchen@cse.cuhk.edu.hk)
 #include "core/result_collector.hpp"
 #include "core/logical_plan.hpp"
 
-#include "storage/data_store.hpp"
+#include "storage/metadata.hpp"
 #include "storage/mpi_snapshot.hpp"
 
 class Worker {
  public:
-    Worker(Node & my_node, vector<Node> & workers): my_node_(my_node), workers_(workers) {
+    Worker(Node & my_node, vector<Node> & workers, Node & remote): my_node_(my_node), workers_(workers), remote_(remote) {
         config_ = Config::GetInstance();
         num_query = 0;
         is_emu_mode_ = false;
@@ -42,21 +42,32 @@ class Worker {
         index_store_ = NULL;
         parser_ = NULL;
         receiver_ = NULL;
-        worker_listener_ = NULL;
+        // worker_listener_ = NULL;
+        remote_listener_ = NULL;
         thpt_monitor_ = NULL;
         rc_ = NULL;
+
+        buf_ = NULL;
+        mailbox_ = NULL;
+        metadata_ = NULL;
     }
 
     ~Worker() {
+        // TODO(big) in start(), so many new but no delete
         for (int i = 0; i < senders_.size(); i++) {
             delete senders_[i];
         }
 
         delete receiver_;
-        delete worker_listener_;
+        // delete worker_listener_;
+        delete remote_listener_;
         delete parser_;
         delete index_store_;
         delete rc_;
+
+        delete buf_;
+        delete mailbox_;
+        delete metadata_;
     }
 
     void Init() {
@@ -64,22 +75,36 @@ class Worker {
         index_store_ = new IndexStore();
         parser_ = new Parser(index_store_);
         receiver_ = new zmq::socket_t(context_, ZMQ_PULL);
-        worker_listener_ = new zmq::socket_t(context_, ZMQ_REP);
+        // worker_listener_ = new zmq::socket_t(context_, ZMQ_REP);
+        remote_listener_ = new zmq::socket_t(context_, ZMQ_PULL);
         thpt_monitor_ = new Throughput_Monitor();
         rc_ = new Result_Collector;
 
         char addr[64];
-        char w_addr[64];
-        sprintf(addr, "tcp://*:%d", my_node_.tcp_port);
-        sprintf(w_addr, "tcp://*:%d", my_node_.tcp_port + config_->global_num_threads + 1);
+        // char w_addr[64];
+        char r_addr[64];
 
+        // Attention: bind a new tcp port different from RDMA use TCP to receive from client
+        sprintf(addr, "tcp://*:%d", my_node_.tcp_port + 1);
+        // sprintf(w_addr, "tcp://*:%d", my_node_.tcp_port + config_->global_num_threads + 1);
+        sprintf(r_addr, "tcp://%s:%d", remote_.hostname.c_str(), remote_.tcp_port + 1); // LCY: now remote config will be add at the end of ib.cfg
+
+        // TODO: change to connect addr here, what's the difference?
         receiver_->bind(addr);
-        worker_listener_->bind(w_addr);
+        cout << "Receiver bind addr:" << addr << endl;
+
+        // worker_listener_->bind(w_addr);
+        // cout << "Worker listener bind addr:" << w_addr << endl;
+
+        remote_listener_->connect(r_addr);
+        cout << "Remote listener connect addr:" << r_addr << endl;
+
 
         // connect to other workers for commun
         for (int i = 0; i < my_node_.get_local_size(); i++) {
             if (i != my_node_.get_local_rank()) {
                 zmq::socket_t * sender = new zmq::socket_t(context_, ZMQ_PUSH);
+                cout << "Worker connect = " << workers_[i].tcp_port << endl;
                 sprintf(addr, "tcp://%s:%d", workers_[i].hostname.c_str(), workers_[i].tcp_port);
                 sender->connect(addr);
                 senders_.push_back(sender);
@@ -283,44 +308,6 @@ class Worker {
         }
     }
 
-    // a listener thread, to listen requests from other workers when RDMA is disabled (using TCP instead)
-    // then, generate the reply by locally accessing the objects(V/E) in datastore
-    void TCPListener(DataStore * datastore) {
-        while (1) {
-            zmq::message_t request;
-            worker_listener_->recv(&request);
-
-            char* buf = new char[request.size()];
-            memcpy(buf, (char *)request.data(), request.size());
-            obinstream um(buf, request.size());
-            ibinstream m;
-
-            uint64_t id;
-            int elem_type;
-            value_t val;
-
-            um >> id;
-            um >> elem_type;
-
-            switch (elem_type) {
-                case Element_T::VERTEX:
-                    datastore->AccessVProperty(id, val);
-                    break;
-                case Element_T::EDGE:
-                    datastore->AccessEProperty(id, val);
-                    break;
-                default:
-                    cout << my_node_.hostname <<"-[ERROR]: Wrong Request Type!" << endl;
-                    exit(1);
-            }
-
-            m << val;
-            zmq::message_t msg(m.size());
-            memcpy((void *)msg.data(), m.get_buf(), m.size());
-            worker_listener_->send(msg);
-        }
-    }
-
     // a listener thread, receive request from clients
     void RecvRequest() {
         while (1) {
@@ -380,80 +367,83 @@ class Worker {
         // snapshot->DisableWrite();
 
         // ===================prepare stage=================
-        NaiveIdMapper * id_mapper = new NaiveIdMapper(my_node_);
+        // NaiveIdMapper * id_mapper = new NaiveIdMapper(my_node_);
+        NaiveIdMapper id_mapper(my_node_);
 
         // init core affinity
-        CoreAffinity * core_affinity = new CoreAffinity();
-        core_affinity->Init();
+        CoreAffinity core_affinity;
+        core_affinity.Init();
         cout << "Worker" << my_node_.get_local_rank() << ": DONE -> Init Core Affinity" << endl;
 
         // set the in-memory layout for RDMA buf
-        Buffer * buf = new Buffer(my_node_);
-        if (config_->global_use_rdma)
-            cout << "Worker" << my_node_.get_local_rank() << ": DONE -> Register RDMA MEM, SIZE = " << buf->GetBufSize() << endl;
-        else
-            cout << "Worker" << my_node_.get_local_rank() << ": DONE -> Register MEM for KVS, SIZE = " << buf->GetBufSize() << endl;
+        buf_ = new Buffer(my_node_);
+        cout << "Worker" << my_node_.get_local_rank() << ": DONE -> Register LOCAL MEM, SIZE = " << buf_->GetLocalBufSize() << endl;
+        
+        // if (config_->global_use_rdma)
+        //     cout << "Worker" << my_node_.get_local_rank() << ": DONE -> Register RDMA MEM, SIZE = " << buf->GetBufSize() << endl;
+        // else
+        //     cout << "Worker" << my_node_.get_local_rank() << ": DONE -> Register MEM for KVS, SIZE = " << buf->GetBufSize() << endl;
 
-        AbstractMailbox * mailbox;
-        if (config_->global_use_rdma)
-            mailbox = new RdmaMailbox(my_node_, buf);
-        else
-            mailbox = new TCPMailbox(my_node_);
-        mailbox->Init(workers_);
-
+        mailbox_ = new RdmaMailbox(my_node_, buf_);
+        mailbox_->Init(workers_, remote_);
         cout << "Worker" << my_node_.get_local_rank() << ": DONE -> Mailbox->Init()" << endl;
 
-        DataStore * datastore = new DataStore(my_node_, id_mapper, buf);
-        DataStore::StaticInstanceP(datastore);
-        datastore->Init(workers_);
+        // recv meta from remote server
+        // char helloreq[] = "[From Compute]: request graphmeta";
+        // zmq::message_t msg(strlen(helloreq) + 1);
+        // memcpy((void*)msg.data(), helloreq, strlen(helloreq) + 1);
 
-        cout << "Worker" << my_node_.get_local_rank() << ": DONE -> DataStore->Init()" << endl;
+        // remote_listener_->send(msg);
+        // cout << "Send request from Compute server : " << helloreq << endl;
+        // zmq::message_t meta(sizeof(GraphMeta));
+        // remote_listener_->recv(&meta);
 
-        // read snapshot area
-        datastore->ReadSnapshot();
+        // while(remote_listener_->recv(&meta) != 0); // LCY: need block to recv meta
+        size_t meta_size;
+        zmq::message_t szmsg(sizeof(size_t));
+        remote_listener_->recv(&szmsg);
+        meta_size = *(size_t *)szmsg.data();
 
-        datastore->LoadDataFromHDFS();
+        GraphMeta graphmeta;
+        obinstream m;
+        zmq::message_t metamsg(meta_size);
+        remote_listener_->recv(&metamsg);
+        m.assign((char *)metamsg.data(), meta_size, 0);
+        m >> graphmeta;
+        cout << graphmeta.DebugString();
+
+        metadata_ = new MetaData(my_node_, &id_mapper, buf_);
+        MetaData::StaticInstanceP(metadata_);
+        metadata_->Init(workers_, graphmeta);
+
+        metadata_->get_string_indexes();
         worker_barrier(my_node_);
 
-        // =======data shuffle==========
-        datastore->Shuffle();
-        cout << "Worker" << my_node_.get_local_rank() << ": DONE -> DataStore->Shuffle()" << endl;
-        // =======data shuffle==========
-
-        datastore->DataConverter();
-        worker_barrier(my_node_);
-
-        cout << "Worker" << my_node_.get_local_rank()  << ": DONE -> Datastore->DataConverter()" << endl;
-
-        parser_->LoadMapping(datastore);
+        parser_->LoadMapping(metadata_);
         cout << "Worker" << my_node_.get_local_rank()  << ": DONE -> Parser_->LoadMapping()" << endl;
 
-        // write snapshot area
-        datastore->WriteSnapshot();
+        // // write snapshot area
+        // datastore->WriteSnapshot();
 
         thread recvreq(&Worker::RecvRequest, this);
-        thread sendmsg(&Worker::SendQueryMsg, this, mailbox, core_affinity);
+        thread sendmsg(&Worker::SendQueryMsg, this, mailbox_, &core_affinity);
+        // thread sendmsg(&Worker::SendQueryMsg, this, mailbox_, core_affinity);
 
-        // for TCP use
-        thread listener;
-        if (!config_->global_use_rdma)
-            listener = thread(&Worker::TCPListener, this, datastore);
-
-        Monitor * monitor = new Monitor(my_node_);
-        monitor->Start();
+        Monitor monitor(my_node_);
+        monitor.Start();
         worker_barrier(my_node_);
 
         // expert driver starts
-        ExpertAdapter * expert_adapter = new ExpertAdapter(my_node_, rc_, mailbox, datastore, core_affinity, index_store_);
-        expert_adapter->Start();
+        // ExpertAdapter * expert_adapter = new ExpertAdapter(my_node_, rc_, mailbox_, metadata_, &core_affinity, index_store_);
+        ExpertAdapter expert_adapter(my_node_, rc_, mailbox_, metadata_, &core_affinity, index_store_);
+        // ExpertAdapter expert_adapter(my_node_, rc_, mailbox_, metadata_, core_affinity, index_store_);
+        expert_adapter.Start();
         cout << "Worker" << my_node_.get_local_rank() << ": DONE -> expert_adapter->Start()" << endl;
         worker_barrier(my_node_);
 
-
         fflush(stdout);
         worker_barrier(my_node_);
-        if (my_node_.get_world_rank() == MASTER_RANK) cout << "Grasper Servers Are All Ready ..." << endl;
-
+        if (my_node_.get_local_rank() == MASTER_RANK) cout << "Grasper Servers Are All Ready ..." << endl;
 
         // pop out the query result from collector
         // TODO(future) add SIG to break and return
@@ -477,27 +467,29 @@ class Worker {
                 zmq::socket_t sender(context_, ZMQ_PUSH);
                 char addr[64];
                 // port calculation is based on our self-defined protocol
-                sprintf(addr, "tcp://%s:%d", re.hostname.c_str(), workers_[my_node_.get_local_rank()].tcp_port + my_node_.get_world_rank());
+                sprintf(addr, "tcp://%s:%d", re.hostname.c_str(), workers_[my_node_.get_local_rank()].tcp_port + my_node_.get_world_rank() + 1);
                 sender.connect(addr);
                 cout << "worker_node" << my_node_.get_local_rank() << " sends the results to Client " << re.hostname << endl;
                 sender.send(msg);
 
-                monitor->IncreaseCounter(1);
+                // monitor.IncreaseCounter(1);
             }
         }
 
-        expert_adapter->Stop();
-        monitor->Stop();
+        expert_adapter.Stop();
+        // monitor.Stop();
+        return;
 
         recvreq.join();
         sendmsg.join();
-        if (!config_->global_use_rdma)
-            listener.join();
+        // if (!config_->global_use_rdma)
+        //     listener.join();
     }
 
  private:
     Node & my_node_;
     vector<Node> & workers_;
+    Node & remote_;
     Config * config_;
     Parser* parser_;
     IndexStore* index_store_;
@@ -505,14 +497,19 @@ class Worker {
     Result_Collector * rc_;
     uint32_t num_query;
 
+    Buffer* buf_;
+    AbstractMailbox * mailbox_;
+    MetaData * metadata_;
+
     bool is_emu_mode_;
     Throughput_Monitor * thpt_monitor_;
 
     zmq::context_t context_;
     zmq::socket_t * receiver_;
-    zmq::socket_t * worker_listener_;
+    // zmq::socket_t * worker_listener_;
 
     vector<zmq::socket_t *> senders_;
+    zmq::socket_t * remote_listener_;
 };
 
 #endif /* WORKER_HPP_ */

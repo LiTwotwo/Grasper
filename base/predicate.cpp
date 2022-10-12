@@ -99,7 +99,6 @@ bool operator>= (const value_t& v1, const value_t& v2) {
 
 bool Evaluate(PredicateValue & pv, const value_t *value) {
     assert(pv.values.size() > 0);
-
     // no value
     if (value == NULL) {
         return pv.pred_type == Predicate_T::NONE;

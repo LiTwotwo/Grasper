@@ -205,6 +205,22 @@ obinstream& operator>>(obinstream& m, value_t& v) {
     return m;
 }
 
+string value_t::DebugString() const {
+    stringstream ss;
+    switch (type)
+    {
+    case 4:{
+        ss << "String type";
+        for(auto it = content.begin(); it != content.end(); ++it)
+            ss << *it;
+        }    
+    default:
+        ss << "Other type";
+        break;
+    }
+    return ss.str();
+}
+
 string kv_pair::DebugString() const {
     stringstream ss;
     ss << "kv_pair: { key = " << key << ", value.type = " << (int)value.type << " }"<< endl;

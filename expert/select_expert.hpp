@@ -15,12 +15,12 @@ Authors: Aaron Li (cjli@cse.cuhk.edu.hk)
 #include "base/predicate.hpp"
 #include "expert/abstract_expert.hpp"
 #include "storage/layout.hpp"
-#include "storage/data_store.hpp"
+#include "storage/metadata.hpp"
 #include "utils/tool.hpp"
 
 class SelectExpert : public AbstractExpert {
  public:
-    SelectExpert(int id, DataStore* data_store, int num_thread, AbstractMailbox * mailbox, CoreAffinity * core_affinity) : AbstractExpert(id, data_store, core_affinity), num_thread_(num_thread), mailbox_(mailbox), type_(EXPERT_T::SELECT) {}
+    SelectExpert(int id, MetaData* metadata, int num_thread, AbstractMailbox * mailbox, CoreAffinity * core_affinity) : AbstractExpert(id, metadata, core_affinity), num_thread_(num_thread), mailbox_(mailbox), type_(EXPERT_T::SELECT) {}
 
     void process(const vector<Expert_Object> & expert_objs, Message & msg) {
         int tid = TidMapper::GetInstance()->GetTid();
@@ -49,7 +49,7 @@ class SelectExpert : public AbstractExpert {
 
         // Create Message
         vector<Message> msg_vec;
-        msg.CreateNextMsg(expert_objs, msg.data, num_thread_, data_store_, core_affinity_, msg_vec);
+        msg.CreateNextMsg(expert_objs, msg.data, num_thread_, metadata_, core_affinity_, msg_vec);
 
         // Send Message
         for (auto& msg : msg_vec) {

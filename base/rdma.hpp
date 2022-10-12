@@ -34,123 +34,81 @@ Authors: Hongzhi Chen (hzchen@cse.cuhk.edu.hk)
 #include <iostream>     // std::cout
 #include <fstream>      // std::ifstream
 #include "base/node.hpp"
+#include "base/qp_manager.hpp"
 
 using namespace std;
 
-#ifdef HAS_RDMA
-
 #include "utils/timer.hpp"
-#include "rdmalib/rdmaio.hpp"
+#include "rlib/rdma_ctrl.hpp"
 
 using namespace rdmaio;
 
-class RDMA {
-    class RDMA_Device {
-     public:
-        RdmaCtrl* ctrl = NULL;
+#define REMOTE_MR_ID 97
+#define LOCAL_MR_ID 100
+#define REMOTE_NID 0
+#define SINGLE_REMOTE_ID 0
+#define RC_MAX_SEND_SIZE 1024
 
-        RDMA_Device(int num_nodes, int num_threads, int nid, char *mem, uint64_t mem_sz, vector<Node> & nodes) : num_threads_(num_threads) {
-            // record IPs of ndoes
-            vector<string> ipset;
-            for (const auto & node : nodes)
-                ipset.push_back(node.ibname);
+class RDMA_Device {
+    // use new third party rdma lib
+    // 1. update init function, in current impl, QPs are created and connected between different workers
+    //    workers pass logic plan by msgs (not change now)
+    //    but worker -> remote connection is not created
+    // 2. update read/write API
+    // 3. update API usage in **_expert
+public:
+    RdmaCtrlPtr global_rdma_ctrl = nullptr;
 
-            int rdma_port = nodes[0].rdma_port;
-            // initialization of new librdma
-            // nid, ipset, port, thread_id-no use, enable single memory region
-            ctrl = new RdmaCtrl(nid, ipset, rdma_port, true);
-            ctrl->open_device();
-            ctrl->set_connect_mr(mem, mem_sz);
-            ctrl->register_connect_mr();  // single
-            ctrl->start_server();
-            for (uint i = 0; i < num_nodes; ++i) {
-                if (i == nid) {
-                    // skip local qp
-                    continue;
-                }
-                for (uint j = 0; j < num_threads * 2; ++j) {
-                    Qp *qp = ctrl->create_rc_qp(j, i, 0, 1);
-                    assert(qp != NULL);
-                }
-            }
+    RNicHandler * opened_rnic;
 
-            while (1) {
-                int connected = 0;
-                for (uint i = 0; i < num_nodes; ++i) {
-                    if (i == nid) {
-                        continue;
-                    }
-                    for (uint j = 0; j < num_threads * 2; ++j) {
-                        Qp *qp = ctrl->create_rc_qp(j, i, 0, 1);
-                        if (qp->inited_) {
-                            connected += 1;
-                        } else {
-                            if (qp->connect_rc()) {
-                                connected += 1;
-                            }
-                        }
-                    }
-                }
-                if (connected == (num_nodes - 1) * num_threads * 2)
-                    break;
-                else
-                    sleep(1);
-            }
-        }
+    std::vector<Node> remote_nodes;
 
-        // 0 on success, -1 otherwise
-        int RdmaRead(int dst_tid, int dst_nid, char *local, uint64_t size, uint64_t off) {
-            // virtual tid for read
-            int vir_tid = dst_tid + num_threads_;
+    RDMA_Device(int num_nodes, int num_threads, int nid, char *mem, uint64_t mem_sz, vector<Node> & nodes, Node & remote);
 
-            Qp* qp = ctrl->get_rc_qp(vir_tid, dst_nid);
-            qp->rc_post_send(IBV_WR_RDMA_READ, local, size, off, IBV_SEND_SIGNALED);
-            if (!qp->first_send())
-                qp->poll_completion();
+    void GetMRMeta(const Node& node);
 
-            qp->poll_completion();
-            return 0;
-            // return rdmaOp(dst_tid, dst_nid, local, size, off, IBV_WR_RDMA_READ);
-        }
+    void AllocMR(char *mem, uint64_t mem_sz);
+    
+    void BuildQPConnection(QPManager * qp_manager);
 
-        int RdmaWrite(int dst_tid, int dst_nid, char *local, uint64_t size, uint64_t off) {
-            Qp* qp = ctrl->get_rc_qp(dst_tid, dst_nid);
+    // inline?
+    const MemoryAttr& GetRemoteMr(int node_id = 0);
 
-            // int flags = (qp->first_send() ? IBV_SEND_SIGNALED : 0);
-            int flags = IBV_SEND_SIGNALED;
-            qp->rc_post_send(IBV_WR_RDMA_WRITE, local, size, off, flags);
+    // 0 on success, -1 otherwise
+    int RdmaRead(int dst_tid, int dst_nid, char *local, uint64_t size, uint64_t off);
 
-            // if(qp->need_poll())
-            qp->poll_completion();
+    int RdmaWrite(int dst_tid, int dst_nid, char *local, uint64_t size, uint64_t off);
 
-            return 0;
-            // return rdmaOp(dst_tid, dst_nid, local, size, off, IBV_WR_RDMA_WRITE);
-        }
+        // int RdmaWriteSelective(int dst_tid, int dst_nid, char *local, uint64_t size, uint64_t off) {
+        //     Qp* qp = ctrl->get_rc_qp(dst_tid, dst_nid);
+        //     int flags = (qp->first_send() ? IBV_SEND_SIGNALED : 0);
+        //     // int flags = IBV_SEND_SIGNALED;
 
-        int RdmaWriteSelective(int dst_tid, int dst_nid, char *local, uint64_t size, uint64_t off) {
-            Qp* qp = ctrl->get_rc_qp(dst_tid, dst_nid);
-            int flags = (qp->first_send() ? IBV_SEND_SIGNALED : 0);
-            // int flags = IBV_SEND_SIGNALED;
+        //     qp->rc_post_send(IBV_WR_RDMA_WRITE, local, size, off, flags);
 
-            qp->rc_post_send(IBV_WR_RDMA_WRITE, local, size, off, flags);
+        //     if (qp->need_poll())
+        //         qp->poll_completion();
+        //     return 0;
+        //     // return rdmaOp(dst_tid, dst_nid, local, size, off, IBV_WR_RDMA_WRITE);
+        // }
 
-            if (qp->need_poll())
-                qp->poll_completion();
-            return 0;
-            // return rdmaOp(dst_tid, dst_nid, local, size, off, IBV_WR_RDMA_WRITE);
-        }
+        // int RdmaWriteNonSignal(int dst_tid, int dst_nid, char *local, uint64_t size, uint64_t off) {
+        //     Qp* qp = ctrl->get_rc_qp(dst_tid, dst_nid);
+        //     int flags = 0;
+        //     qp->rc_post_send(IBV_WR_RDMA_WRITE, local, size, off, flags);
+        //     return 0;
+        // }
 
-        int RdmaWriteNonSignal(int dst_tid, int dst_nid, char *local, uint64_t size, uint64_t off) {
-            Qp* qp = ctrl->get_rc_qp(dst_tid, dst_nid);
-            int flags = 0;
-            qp->rc_post_send(IBV_WR_RDMA_WRITE, local, size, off, flags);
-            return 0;
-        }
-
-     private:
+     private:   
         int num_threads_;
+
+        // LCY: if more remote nodes, change this to a map<node_id, MemoryAttr>
+        MemoryAttr remote_mr_;
+
+        QPManager *qp_man_;        
     };
 
+class RDMA {
  public:
     RDMA_Device *dev = NULL;
 
@@ -158,8 +116,8 @@ class RDMA {
 
     ~RDMA() { if (dev != NULL) delete dev; }
 
-    void init_dev(int num_nodes, int num_threads, int nid, char *mem, uint64_t mem_sz, vector<Node> & nodes) {
-        dev = new RDMA_Device(num_nodes, num_threads, nid, mem, mem_sz, nodes);
+    void init_dev(int num_nodes, int num_threads, int nid, char *mem, uint64_t mem_sz, vector<Node> & nodes, Node & remote) {
+        dev = new RDMA_Device(num_nodes, num_threads, nid, mem, mem_sz, nodes, remote);
     }
 
     inline static bool has_rdma() { return true; }
@@ -170,62 +128,4 @@ class RDMA {
     }
 };
 
-void RDMA_init(int num_nodes, int num_threads, int nid, char *mem, uint64_t mem_sz, vector<Node> & nodes);
-
-#else
-
-class RDMA {
-    class RDMA_Device {
-     public:
-        RDMA_Device(int num_nodes, int num_threads, int nid, char *mem, uint64_t mem_sz, vector<Node> & nodes) {
-            cout << "This system is compiled without RDMA support." << endl;
-            assert(false);
-        }
-
-        int RdmaRead(int dst_tid, int dst_nid, char *local, uint64_t size, uint64_t remote_offset) {
-            cout << "This system is compiled without RDMA support." << endl;
-            assert(false);
-            return 0;
-        }
-
-        int RdmaWrite(int dst_tid, int dst_nid, char *local, uint64_t size, uint64_t remote_offset) {
-            cout << "This system is compiled without RDMA support." << endl;
-            assert(false);
-            return 0;
-        }
-
-        int RdmaWriteSelective(int dst_tid, int dst_nid, char *local, uint64_t size, uint64_t remote_offset) {
-            cout << "This system is compiled without RDMA support." << endl;
-            assert(false);
-            return 0;
-        }
-
-        int RdmaWriteNonSignal(int dst_tid, int dst_nid, char *local, uint64_t size, uint64_t off) {
-            cout << "This system is compiled without RDMA support." << endl;
-            assert(false);
-            return 0;
-        }
-    };
-
- public:
-    RDMA_Device *dev = NULL;
-
-    RDMA() { }
-
-    ~RDMA() { }
-
-    void init_dev(int num_nodes, int num_threads, int nid, char *mem, uint64_t mem_sz, vector<Node> & nodes) {
-        dev = new RDMA_Device(num_nodes, num_threads, nid, mem, mem_sz, nodes);
-    }
-
-    inline static bool has_rdma() { return false; }
-
-    static RDMA &get_rdma() {
-        static RDMA rdma;
-        return rdma;
-    }
-};
-
-void RDMA_init(int num_nodes, int num_threads, int nid, char *mem, uint64_t mem_sz, vector<Node> & nodes);
-
-#endif
+void RDMA_init(int num_nodes, int num_threads, int nid, char *mem, uint64_t mem_sz, vector<Node> & nodes, Node & remote);

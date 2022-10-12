@@ -15,12 +15,12 @@ Authors: Aaron Li (cjli@cse.cuhk.edu.hk)
 #include "expert/abstract_expert.hpp"
 #include "expert/expert_cache.hpp"
 #include "storage/layout.hpp"
-#include "storage/data_store.hpp"
+#include "storage/metadata.hpp"
 #include "utils/tool.hpp"
 
 class ValuesExpert : public AbstractExpert {
  public:
-    ValuesExpert(int id, DataStore* data_store, int machine_id, int num_thread, AbstractMailbox * mailbox, CoreAffinity * core_affinity) : AbstractExpert(id, data_store, core_affinity), machine_id_(machine_id), num_thread_(num_thread), mailbox_(mailbox), type_(EXPERT_T::VALUES) {
+    ValuesExpert(int id, MetaData* metadata, int machine_id, int num_thread, AbstractMailbox * mailbox, CoreAffinity * core_affinity) : AbstractExpert(id, metadata, core_affinity), machine_id_(machine_id), num_thread_(num_thread), mailbox_(mailbox), type_(EXPERT_T::VALUES) {
         config_ = Config::GetInstance();
     }
 
@@ -49,7 +49,7 @@ class ValuesExpert : public AbstractExpert {
         }
 
         vector<Message> msg_vec;
-        msg.CreateNextMsg(expert_objs, msg.data, num_thread_, data_store_, core_affinity_, msg_vec);
+        msg.CreateNextMsg(expert_objs, msg.data, num_thread_, metadata_, core_affinity_, msg_vec);
 
         // Send Message
         for (auto& msg : msg_vec) {
@@ -77,21 +77,24 @@ class ValuesExpert : public AbstractExpert {
             vector<value_t> newData;
 
             for (auto & value : pair.second) {
-                vid_t v_id(Tool::value_t2int(value));
-                Vertex* vtx = data_store_->GetVertex(v_id);
+                vid_t v_id(Tool::value_t2int(value)); 
+                Vertex vtx;
+                metadata_->GetVertex(tid, v_id, vtx);
+                vector<label_t> vp_list;
+                metadata_->GetVPList(tid, vtx, vp_list);
 
                 if (key_list.empty()) {
-                    for (auto & pkey : vtx->vp_list) {
+                    for (auto & pkey : vp_list) {
                         vpid_t vp_id(v_id, pkey);
 
                         value_t val;
                         // Try cache
-                        if (data_store_->VPKeyIsLocal(vp_id) || !config_->global_enable_caching) {
-                            data_store_->GetPropertyForVertex(tid, vp_id, val);
+                        if (metadata_->VPKeyIsLocal(vp_id) || !config_->global_enable_caching) {
+                            metadata_->GetPropertyForVertex(tid, vp_id, val);
                         } else {
                             if (!cache.get_property_from_cache(vp_id.value(), val)) {
                                 // not found in cache
-                                data_store_->GetPropertyForVertex(tid, vp_id, val);
+                                metadata_->GetPropertyForVertex(tid, vp_id, val);
                                 cache.insert_properties(vp_id.value(), val);
                             }
                         }
@@ -100,17 +103,17 @@ class ValuesExpert : public AbstractExpert {
                     }
                 } else {
                     for (auto key : key_list) {
-                        if (find(vtx->vp_list.begin(), vtx->vp_list.end(), key) == vtx->vp_list.end()) {
+                        if (find(vp_list.begin(), vp_list.end(), key) == vp_list.end()) {
                             continue;
                         }
 
                         vpid_t vp_id(v_id, key);
                         value_t val;
-                        if (data_store_->VPKeyIsLocal(vp_id) || !config_->global_enable_caching) {
-                            data_store_->GetPropertyForVertex(tid, vp_id, val);
+                        if (metadata_->VPKeyIsLocal(vp_id) || !config_->global_enable_caching) {
+                            metadata_->GetPropertyForVertex(tid, vp_id, val);
                         } else {
                             if (!cache.get_property_from_cache(vp_id.value(), val)) {
-                                data_store_->GetPropertyForVertex(tid, vp_id, val);
+                                metadata_->GetPropertyForVertex(tid, vp_id, val);
                                 cache.insert_properties(vp_id.value(), val);
                             }
                         }
@@ -131,19 +134,22 @@ class ValuesExpert : public AbstractExpert {
             for (auto & value : pair.second) {
                 eid_t e_id;
                 uint2eid_t(Tool::value_t2uint64_t(value), e_id);
-                Edge* edge = data_store_->GetEdge(e_id);
+                Edge edge;
+                metadata_->GetEdge(tid, e_id, edge);
+                vector<label_t> ep_list;
+                metadata_->GetEPList(tid, edge, ep_list);
 
                 if (key_list.empty()) {
-                    for (auto & pkey : edge->ep_list) {
+                    for (auto & pkey : ep_list) {
                         epid_t ep_id(e_id, pkey);
 
                         value_t val;
-                        if (data_store_->EPKeyIsLocal(ep_id) || !config_->global_enable_caching) {
-                            data_store_->GetPropertyForEdge(tid, ep_id, val);
+                        if (metadata_->EPKeyIsLocal(ep_id) || !config_->global_enable_caching) {
+                            metadata_->GetPropertyForEdge(tid, ep_id, val);
                         } else {
                             if (!cache.get_property_from_cache(ep_id.value(), val)) {
                                 // not found in cache
-                                data_store_->GetPropertyForEdge(tid, ep_id, val);
+                                metadata_->GetPropertyForEdge(tid, ep_id, val);
                                 cache.insert_properties(ep_id.value(), val);
                             }
                         }
@@ -152,18 +158,18 @@ class ValuesExpert : public AbstractExpert {
                     }
                 } else {
                     for (auto key : key_list) {
-                        if (find(edge->ep_list.begin(), edge->ep_list.end(), key) == edge->ep_list.end()) {
+                        if (find(ep_list.begin(), ep_list.end(), key) == ep_list.end()) {
                             continue;
                         }
 
                         epid_t ep_id(e_id, key);
                         value_t val;
-                        if (data_store_->EPKeyIsLocal(ep_id) || !config_->global_enable_caching) {
-                            data_store_->GetPropertyForEdge(tid, ep_id, val);
+                        if (metadata_->EPKeyIsLocal(ep_id) || !config_->global_enable_caching) {
+                            metadata_->GetPropertyForEdge(tid, ep_id, val);
                         } else {
                             if (!cache.get_property_from_cache(ep_id.value(), val)) {
                                 // not found in cache
-                                data_store_->GetPropertyForEdge(tid, ep_id, val);
+                                metadata_->GetPropertyForEdge(tid, ep_id, val);
                                 cache.insert_properties(ep_id.value(), val);
                             }
                         }

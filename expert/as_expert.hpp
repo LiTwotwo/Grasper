@@ -20,7 +20,7 @@ Authors: Aaron Li (cjli@cse.cuhk.edu.hk)
 
 class AsExpert : public AbstractExpert {
  public:
-    AsExpert(int id, DataStore* data_store, int num_thread, AbstractMailbox * mailbox, CoreAffinity* core_affinity) : AbstractExpert(id, data_store, core_affinity), num_thread_(num_thread), mailbox_(mailbox), type_(EXPERT_T::AS) {}
+    AsExpert(int id, MetaData* metadata, int num_thread, AbstractMailbox * mailbox, CoreAffinity* core_affinity) : AbstractExpert(id, metadata, core_affinity), num_thread_(num_thread), mailbox_(mailbox), type_(EXPERT_T::AS) {}
 
     void process(const vector<Expert_Object> & expert_objs, Message & msg) {
         int tid = TidMapper::GetInstance()->GetTid();
@@ -37,7 +37,7 @@ class AsExpert : public AbstractExpert {
 
         // Create Message
         vector<Message> msg_vec;
-        msg.CreateNextMsg(expert_objs, msg.data, num_thread_, data_store_, core_affinity_, msg_vec);
+        msg.CreateNextMsg(expert_objs, msg.data, num_thread_, metadata_, core_affinity_, msg_vec);
 
         // Send Message
         for (auto& msg : msg_vec) {

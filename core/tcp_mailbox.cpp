@@ -27,7 +27,7 @@ TCPMailbox::~TCPMailbox() {
     free(local_msgs);
 }
 
-void TCPMailbox::Init(vector<Node> & nodes) {
+void TCPMailbox::Init(vector<Node> & nodes, Node & remote) {
     for (int nid = 0; nid < config_->global_num_workers; nid++) {
         Node & r_node = GetNodeById(nodes, nid + 1);
         string ibname = r_node.ibname;
@@ -37,7 +37,7 @@ void TCPMailbox::Init(vector<Node> & nodes) {
 
             senders_[pcode] = new zmq::socket_t(context, ZMQ_PUSH);
             char addr[64] = "";
-            sprintf(addr, "tcp://%s:%d", ibname.c_str(), r_node.tcp_port + 1 + tid);
+            sprintf(addr, "tcp://%s:%d", ibname.c_str(), r_node.tcp_port + 10 + tid);
             // FIXME: check return value
             senders_[pcode]->connect(addr);
         }
@@ -49,8 +49,9 @@ void TCPMailbox::Init(vector<Node> & nodes) {
         // Set 10 ms timeout to avoid permanent blocking of local recev buffer
         // receivers_[tid]->setsockopt(ZMQ_RCVTIMEO, 10);
         char addr[64] = "";
-        sprintf(addr, "tcp://*:%d", my_node_.tcp_port + 1 + tid);
+        sprintf(addr, "tcp://*:%d", my_node_.tcp_port + 10 + tid);
         receivers_[tid]->bind(addr);
+        cout << "Receiver" << tid << " bind addr:" << addr << endl;
     }
 
     locks = (pthread_spinlock_t *)malloc(sizeof(pthread_spinlock_t) * 

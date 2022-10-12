@@ -16,6 +16,7 @@ Authors: Chenghuan Huang (chhuang@cse.cuhk.edu.hk)
 using __gnu_cxx::hash_map;
 
 template<typename T>
+// LCY: when write vertex, T = VertexTable *
 static inline bool WriteSerImpl(string fn, T& data) {
     ofstream out_f(fn, ios::binary);
 

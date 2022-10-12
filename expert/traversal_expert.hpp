@@ -15,8 +15,9 @@ Authors: Aaron Li (cjli@cse.cuhk.edu.hk)
 #include "base/node.hpp"
 #include "base/type.hpp"
 #include "expert/abstract_expert.hpp"
+#include "expert/expert_cache.hpp"
 #include "storage/layout.hpp"
-#include "storage/data_store.hpp"
+#include "storage/metadata.hpp"
 #include "utils/tool.hpp"
 
 // IN-OUT-BOTH
@@ -25,7 +26,7 @@ using namespace std::placeholders;
 
 class TraversalExpert : public AbstractExpert {
  public:
-    TraversalExpert(int id, DataStore* data_store, int num_thread, AbstractMailbox * mailbox, CoreAffinity * core_affinity) : AbstractExpert(id, data_store, core_affinity), num_thread_(num_thread), mailbox_(mailbox), type_(EXPERT_T::TRAVERSAL) {
+    TraversalExpert(int id, MetaData* metadata, int num_thread, AbstractMailbox * mailbox, CoreAffinity * core_affinity) : AbstractExpert(id, metadata, core_affinity), num_thread_(num_thread), mailbox_(mailbox), type_(EXPERT_T::TRAVERSAL) {
         config_ = Config::GetInstance();
     }
 
@@ -73,7 +74,7 @@ class TraversalExpert : public AbstractExpert {
 
         // Create Message
         vector<Message> msg_vec;
-        msg.CreateNextMsg(expert_objs, msg.data, num_thread_, data_store_, core_affinity_, msg_vec);
+        msg.CreateNextMsg(expert_objs, msg.data, num_thread_, metadata_, core_affinity_, msg_vec);
 
         // Send Message
         for (auto& msg : msg_vec) {
@@ -104,12 +105,18 @@ class TraversalExpert : public AbstractExpert {
             for (auto & value : pair.second) {
                 // Get the current vertex id and use it to get vertex instance
                 vid_t cur_vtx_id(Tool::value_t2int(value));
-                Vertex* vtx = data_store_->GetVertex(cur_vtx_id);
+                Vertex vtx;
+                metadata_->GetVertex(tid, cur_vtx_id, vtx);
 
                 // for each neighbor, create a new value_t and store into newData
                 // IN & BOTH
                 if (dir != Direction_T::OUT) {
-                    for (auto & in_nb : vtx->in_nbs) {  // in_nb : vid_t
+                    vector<vid_t> in_nbs;
+                    int sz = metadata_->GetInNbs(tid, vtx, in_nbs);
+                    #ifdef TEST_WITH_COUNT
+                        metadata_->RecordVin(sz*sizeof(vid_t));
+                    #endif
+                    for (auto & in_nb : in_nbs) {  // in_nb : vid_t
                         // Get edge_id
                         if (lid > 0) {
                             eid_t e_id(cur_vtx_id.value(), in_nb.value());
@@ -127,7 +134,12 @@ class TraversalExpert : public AbstractExpert {
                 }
                 // OUT & BOTH
                 if (dir != Direction_T::IN) {
-                    for (auto & out_nb : vtx->out_nbs) {
+                    vector<vid_t> out_nbs;
+                    int sz = metadata_->GetOutNbs(tid, vtx, out_nbs);
+                    #ifdef TEST_WITH_COUNT
+                        metadata_->RecordVout(sz*sizeof(vid_t));
+                    #endif
+                    for (auto & out_nb : out_nbs) {
                         if (lid > 0) {
                             eid_t e_id(out_nb.value(), cur_vtx_id.value());
                             label_t label;
@@ -157,10 +169,18 @@ class TraversalExpert : public AbstractExpert {
             for (auto & value : pair.second) {
                 // Get the current vertex id and use it to get vertex instance
                 vid_t cur_vtx_id(Tool::value_t2int(value));
-                Vertex* vtx = data_store_->GetVertex(cur_vtx_id);
+                Vertex vtx;
+                metadata_->GetVertex(tid, cur_vtx_id, vtx);
 
                 if (dir != Direction_T::OUT) {
-                    for (auto & in_nb : vtx->in_nbs) {  // in_nb : vid_t
+                    vector<vid_t> in_nbs;
+                    int sz = metadata_->GetInNbs(tid, vtx, in_nbs);
+
+                    #ifdef TEST_WITH_COUNT
+                        metadata_->RecordVin(sz*sizeof(vid_t));
+                    #endif
+
+                    for (auto & in_nb : in_nbs) {  // in_nb : vid_t
                         // Get edge_id
                         eid_t e_id(cur_vtx_id.value(), in_nb.value());
                         if (lid > 0) {
@@ -178,7 +198,13 @@ class TraversalExpert : public AbstractExpert {
                 }
 
                 if (dir != Direction_T::IN) {
-                    for (auto & out_nb : vtx->out_nbs) {
+                    vector<vid_t> out_nbs;
+                    int sz = metadata_->GetOutNbs(tid, vtx, out_nbs);
+
+                    #ifdef TEST_WITH_COUNT
+                        metadata_->RecordVout(out_nbs.size()*sizeof(vid_t));
+                    #endif
+                    for (auto & out_nb : out_nbs) {
                         // Get edge_id
                         eid_t e_id(out_nb.value(), cur_vtx_id.value());
                         if (lid > 0) {
@@ -238,11 +264,11 @@ class TraversalExpert : public AbstractExpert {
     }
 
     void get_label_for_edge(int tid, eid_t e_id, label_t & label) {
-        if (data_store_->EPKeyIsLocal(epid_t(e_id, 0)) || !config_->global_enable_caching) {
-            data_store_->GetLabelForEdge(tid, e_id, label);
+        if (metadata_->EPKeyIsLocal(epid_t(e_id, 0)) || !config_->global_enable_caching) {
+            metadata_->GetLabelForEdge(tid, e_id, label);
         } else {
             if (!cache.get_label_from_cache(e_id.value(), label)) {
-                data_store_->GetLabelForEdge(tid, e_id, label);
+                metadata_->GetLabelForEdge(tid, e_id, label);
                 cache.insert_label(e_id.value(), label);
             }
         }

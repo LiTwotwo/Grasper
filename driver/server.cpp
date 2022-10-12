@@ -17,6 +17,7 @@ int main(int argc, char* argv[]) {
 
     Node my_node;
     InitMPIComm(&argc, &argv, my_node);
+    std::cout << "Init success" << std::endl;
 
     string cfg_fname = argv[1];
     CHECK(!cfg_fname.empty());
@@ -28,8 +29,11 @@ int main(int argc, char* argv[]) {
     my_node.ibname = node.ibname;
     my_node.tcp_port = node.tcp_port;
     my_node.rdma_port = node.rdma_port;
+    my_node.hostname = node.hostname;
     cout << my_node.DebugString();
     nodes.erase(nodes.begin());  // delete the master info in nodes (array) for rdma init
+    Node remote = nodes.back();
+    nodes.pop_back();
 
     // set my_node as the shared static Node instance
     my_node.InitialLocalWtime();
@@ -40,7 +44,7 @@ int main(int argc, char* argv[]) {
     Config* config = Config::GetInstance();
     config->Init();
 
-    cout  << "DONE -> Config->Init()" << endl;
+    cout  << "DONE -> Local Config->Init()" << endl;
 
     if (my_node.get_world_rank() == MASTER_RANK) {
         Master master(my_node);
@@ -48,13 +52,26 @@ int main(int argc, char* argv[]) {
 
         master.Start();
     } else {
-        Worker worker(my_node, nodes);
+        Worker worker(my_node, nodes, remote);
         worker.Init();
         worker.Start();
 
         worker_barrier(my_node);
         worker_finalize(my_node);
     }
+    // if (my_node.get_world_rank() == MASTER_RANK) {
+    //     Worker worker(my_node, nodes, remote);
+    //     worker.Init();
+    //     worker.Start();
+
+    //     worker_barrier(my_node);
+    //     worker_finalize(my_node);
+    // } else {
+    //     Master master(my_node);
+    //     master.Init();
+
+    //     master.Start();
+    // }
 
     node_barrier();
     node_finalize();

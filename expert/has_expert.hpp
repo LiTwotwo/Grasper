@@ -17,12 +17,12 @@ Authors: Aaron Li (cjli@cse.cuhk.edu.hk)
 #include "expert/abstract_expert.hpp"
 #include "expert/expert_cache.hpp"
 #include "storage/layout.hpp"
-#include "storage/data_store.hpp"
+#include "storage/metadata.hpp"
 #include "utils/tool.hpp"
 
 class HasExpert : public AbstractExpert {
  public:
-    HasExpert(int id, DataStore * data_store, int machine_id, int num_thread, AbstractMailbox * mailbox, CoreAffinity* core_affinity) : AbstractExpert(id, data_store, core_affinity), machine_id_(machine_id), num_thread_(num_thread), mailbox_(mailbox), type_(EXPERT_T::HAS) {
+    HasExpert(int id, MetaData * metadata, int machine_id, int num_thread, AbstractMailbox * mailbox, CoreAffinity* core_affinity) : AbstractExpert(id, metadata, core_affinity), machine_id_(machine_id), num_thread_(num_thread), mailbox_(mailbox), type_(EXPERT_T::HAS) {
         config_ = Config::GetInstance();
     }
 
@@ -78,7 +78,7 @@ class HasExpert : public AbstractExpert {
 
         // Create Message
         vector<Message> msg_vec;
-        msg.CreateNextMsg(expert_objs, msg.data, num_thread_, data_store_, core_affinity_, msg_vec);
+        msg.CreateNextMsg(expert_objs, msg.data, num_thread_, metadata_, core_affinity_, msg_vec);
 
         // Send Message
         for (auto& msg : msg_vec) {
@@ -104,15 +104,22 @@ class HasExpert : public AbstractExpert {
     void EvaluateVertex(int tid, vector<pair<history_t, vector<value_t>>> & data, vector<pair<int, PredicateValue>> & pred_chain) {
         auto checkFunction = [&](value_t& value) {
             vid_t v_id(Tool::value_t2int(value));
-            Vertex* vtx = data_store_->GetVertex(v_id);
+            Vertex vtx;
+            metadata_->GetVertex(tid, v_id, vtx);
+            vector<label_t> vp_list;
+            metadata_->GetVPList(tid, vtx, vp_list);
 
             for (auto & pred_pair : pred_chain) {
                 int pid = pred_pair.first;
                 PredicateValue pred = pred_pair.second;
 
+                #ifdef TEST_WITH_COUNT
+                    metadata_->RecordVtx(VP_NBS * sizeof(label_t));
+                #endif
+
                 if (pid == -1) {
-                    int counter = vtx->vp_list.size();
-                    for (auto & pkey : vtx->vp_list) {
+                    int counter = vp_list.size();
+                    for (auto & pkey : vp_list) {
                         vpid_t vp_id(v_id, pkey);
 
                         value_t val;
@@ -129,7 +136,7 @@ class HasExpert : public AbstractExpert {
                     }
                 } else {
                     // Check whether key exists for this vtx
-                    if (find(vtx->vp_list.begin(), vtx->vp_list.end(), pid) == vtx->vp_list.end()) {
+                    if (find(vp_list.begin(), vp_list.end(), pid) == vp_list.end()) {
                         // does not exist
                         if (pred.pred_type == Predicate_T::NONE)
                             continue;
@@ -162,15 +169,21 @@ class HasExpert : public AbstractExpert {
         auto checkFunction = [&](value_t& value) {
             eid_t e_id;
             uint2eid_t(Tool::value_t2uint64_t(value), e_id);
-            Edge* edge = data_store_->GetEdge(e_id);
+            Edge edge;
+            metadata_->GetEdge(tid, e_id, edge);
+            vector<label_t> ep_list;
+            int sz = metadata_->GetEPList(tid, edge, ep_list);
 
             for (auto & pred_pair : pred_chain) {
                 int pid = pred_pair.first;
                 PredicateValue pred = pred_pair.second;
 
+                #ifdef TEST_WITH_COUNT
+                    metadata_->RecordEdg(sz* sizeof(label_t));
+                #endif
                 if (pid == -1) {
-                    int counter = edge->ep_list.size();
-                    for (auto & pkey : edge->ep_list) {
+                    int counter = ep_list.size();
+                    for (auto & pkey : ep_list) {
                         epid_t ep_id(e_id, pkey);
                         value_t val;
                         get_properties_for_edge(tid, ep_id, val);
@@ -186,7 +199,7 @@ class HasExpert : public AbstractExpert {
                     }
                 } else {
                     // Check whether key exists for this vtx
-                    if (find(edge->ep_list.begin(), edge->ep_list.end(), pid) == edge->ep_list.end()) {
+                    if (find(ep_list.begin(), ep_list.end(), pid) == ep_list.end()) {
                         // does not exist
                         if (pred.pred_type == Predicate_T::NONE)
                             continue;
@@ -217,26 +230,32 @@ class HasExpert : public AbstractExpert {
     }
 
     void get_properties_for_vertex(int tid, vpid_t vp_id, value_t & val) {
-        if (data_store_->VPKeyIsLocal(vp_id) || !config_->global_enable_caching) {
+        if (metadata_->VPKeyIsLocal(vp_id) || !config_->global_enable_caching) {
             // No Need to check Cache for local or cache is disabled
-            data_store_->GetPropertyForVertex(tid, vp_id, val);
+            metadata_->GetPropertyForVertex(tid, vp_id, val);
         } else {
             if (!cache.get_property_from_cache(vp_id.value(), val)) {
-                data_store_->GetPropertyForVertex(tid, vp_id, val);
+                metadata_->GetPropertyForVertex(tid, vp_id, val);
                 cache.insert_properties(vp_id.value(), val);
             }
         }
+        #ifdef TEST_WITH_COUNT
+            metadata_->RecordVp(val.content.size());
+        #endif
     }
 
     void get_properties_for_edge(int tid, epid_t ep_id, value_t & val) {
-        if (data_store_->EPKeyIsLocal(ep_id) || !config_->global_enable_caching) {
-            data_store_->GetPropertyForEdge(tid, ep_id, val);
+        if (metadata_->EPKeyIsLocal(ep_id) || !config_->global_enable_caching) {
+            metadata_->GetPropertyForEdge(tid, ep_id, val);
         } else {
             if (!cache.get_property_from_cache(ep_id.value(), val)) {
-                data_store_->GetPropertyForEdge(tid, ep_id, val);
+                metadata_->GetPropertyForEdge(tid, ep_id, val);
                 cache.insert_properties(ep_id.value(), val);
             }
         }
+        #ifdef TEST_WITH_COUNT
+            metadata_->RecordEp(val.content.size());
+        #endif
     }
 };
 

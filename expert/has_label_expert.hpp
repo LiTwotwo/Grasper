@@ -15,12 +15,12 @@ Authors: Aaron Li (cjli@cse.cuhk.edu.hk)
 #include "expert/abstract_expert.hpp"
 #include "expert/expert_cache.hpp"
 #include "storage/layout.hpp"
-#include "storage/data_store.hpp"
+#include "storage/metadata.hpp"
 #include "utils/tool.hpp"
 
 class HasLabelExpert : public AbstractExpert {
  public:
-    HasLabelExpert(int id, DataStore * data_store, int machine_id, int num_thread, AbstractMailbox * mailbox, CoreAffinity* core_affinity) : AbstractExpert(id, data_store, core_affinity), machine_id_(machine_id), num_thread_(num_thread), mailbox_(mailbox), type_(EXPERT_T::HASLABEL) {
+    HasLabelExpert(int id, MetaData * metadata, int machine_id, int num_thread, AbstractMailbox * mailbox, CoreAffinity* core_affinity) : AbstractExpert(id, metadata, core_affinity), machine_id_(machine_id), num_thread_(num_thread), mailbox_(mailbox), type_(EXPERT_T::HASLABEL) {
         config_ = Config::GetInstance();
     }
 
@@ -59,7 +59,7 @@ class HasLabelExpert : public AbstractExpert {
 
         // Create Message
         vector<Message> msg_vec;
-        msg.CreateNextMsg(expert_objs, msg.data, num_thread_, data_store_, core_affinity_, msg_vec);
+        msg.CreateNextMsg(expert_objs, msg.data, num_thread_, metadata_, core_affinity_, msg_vec);
 
         // Send Message
         for (auto& msg : msg_vec) {
@@ -87,11 +87,11 @@ class HasLabelExpert : public AbstractExpert {
             vid_t v_id(Tool::value_t2int(value));
 
             label_t label;
-            if (data_store_->VPKeyIsLocal(vpid_t(v_id, 0)) || !config_->global_enable_caching) {
-                data_store_->GetLabelForVertex(tid, v_id, label);
+            if (metadata_->VPKeyIsLocal(vpid_t(v_id, 0)) || !config_->global_enable_caching) {
+                metadata_->GetLabelForVertex(tid, v_id, label);
             } else {
                 if (!cache.get_label_from_cache(v_id.value(), label)) {
-                    data_store_->GetLabelForVertex(tid, v_id, label);
+                    metadata_->GetLabelForVertex(tid, v_id, label);
                     cache.insert_label(v_id.value(), label);
                 }
             }
@@ -115,11 +115,11 @@ class HasLabelExpert : public AbstractExpert {
             uint2eid_t(Tool::value_t2uint64_t(value), e_id);
 
             label_t label;
-            if (data_store_->EPKeyIsLocal(epid_t(e_id, 0)) || !config_->global_enable_caching) {
-                data_store_->GetLabelForEdge(tid, e_id, label);
+            if (metadata_->EPKeyIsLocal(epid_t(e_id, 0)) || !config_->global_enable_caching) {
+                metadata_->GetLabelForEdge(tid, e_id, label);
             } else {
                 if (!cache.get_label_from_cache(e_id.value(), label)) {
-                    data_store_->GetLabelForEdge(tid, e_id, label);
+                    metadata_->GetLabelForEdge(tid, e_id, label);
                     cache.insert_label(e_id.value(), label);
                 }
             }

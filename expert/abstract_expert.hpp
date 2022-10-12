@@ -14,12 +14,12 @@ Authors: Hongzhi Chen (hzchen@cse.cuhk.edu.hk)
 
 #include "base/core_affinity.hpp"
 #include "core/message.hpp"
-#include "storage/data_store.hpp"
+#include "storage/metadata.hpp"
 #include "utils/tid_mapper.hpp"
 
 class AbstractExpert {
  public:
-    AbstractExpert(int id, DataStore* data_store, CoreAffinity* core_affinity):id_(id), data_store_(data_store), core_affinity_(core_affinity) {}
+    AbstractExpert(int id, MetaData* metadata, CoreAffinity* core_affinity):id_(id), metadata_(metadata), core_affinity_(core_affinity) {}
 
     virtual ~AbstractExpert() {}
 
@@ -29,7 +29,7 @@ class AbstractExpert {
 
  protected:
     // Data Store
-    DataStore* data_store_;
+    MetaData* metadata_;
 
     // Core affinity
     CoreAffinity* core_affinity_;

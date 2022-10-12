@@ -151,8 +151,10 @@ class Tool {
             case 1:  // int
                 str2int(s_value, kvpair.value);
                 break;
-            default:
+            default:{
                 cout << "Error when parse the KV pair from sting!" << endl;
+                exit(0);
+            }
         }
     }
 

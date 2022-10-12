@@ -1,3 +1,11 @@
+/*
+ * @Description: Orig mailbox is used to send & recv control and data msg from other nodes
+ *               Add RDMAIO with remote
+ * @Author: chunyuLi 
+ * @Date: 2022-09-07 13:20:22 
+ * @Last Modified by: chunyuLi
+ * @Last Modified time: 2022-09-08 17:37:32
+ */
 /* Copyright 2019 Husky Data Lab, CUHK
 
 Authors: Hongzhi Chen (hzchen@cse.cuhk.edu.hk)
@@ -33,9 +41,11 @@ class RdmaMailbox : public AbstractMailbox {
         config_ = Config::GetInstance();
     }
 
-    virtual ~RdmaMailbox() {}
+    virtual ~RdmaMailbox() {
+        std::cout << "Delete Mailbox" << std::endl;
+    }
 
-    void Init(vector<Node> & nodes) override;
+    void Init(vector<Node> & nodes, Node & remote) override;
 
     // When sent to the same recv buffer, the consistency relies on
     // the lock in the id_mapper
@@ -75,7 +85,7 @@ class RdmaMailbox : public AbstractMailbox {
     bool CheckRecvBuf(int tid, int nid);
     void FetchMsgFromRecvBuf(int tid, int nid, obinstream & um);
     bool IsBufferFull(int dst_nid, int dst_tid, uint64_t tail, uint64_t msg_sz);
-    bool SendData(int tid, const mailbox_data_t& data);
+    bool SendData(int tid, mailbox_data_t& data);
 
     inline int GetIndex(int tid, int nid) {
         nid = nid < node_.get_local_rank() ? nid : nid - 1;
@@ -87,7 +97,6 @@ class RdmaMailbox : public AbstractMailbox {
     Buffer * buffer_;
 
     vector<vector<mailbox_data_t>> pending_msgs;
-
     rbf_rmeta_t *rmetas = NULL;
     rbf_lmeta_t *lmetas = NULL;
     pthread_spinlock_t *recv_locks = NULL;

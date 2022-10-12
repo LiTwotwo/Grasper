@@ -24,28 +24,126 @@
 
 Authors: Hongzhi Chen (hzchen@cse.cuhk.edu.hk)
 */
-
+#pragma once
 #include "base/rdma.hpp"
 
-#ifdef HAS_RDMA
+RDMA_Device::RDMA_Device(int num_nodes, int num_threads, int nid, char *mem, uint64_t mem_sz, vector<Node> & nodes, Node & remote) : num_threads_(num_threads) {
+    // record IPs of ndoes
+    vector<string> ipset;
+    for (const auto & node : nodes)
+        ipset.push_back(node.ibname);
 
-void RDMA_init(int num_nodes,  int num_threads, int nid, char *mem, uint64_t mem_sz, vector<Node> & nodes) {
+    // initialization of new librdma
+    // int node_id, int tcp_base_port
+    // start listen QP & MR request on local tcp port
+    global_rdma_ctrl = std::make_shared<RdmaCtrl>(nid, nodes[nid].tcp_port);
+    std::cout << "RDMA Ctrl create success!" << std::endl;
+            
+    RdmaCtrl::DevIdx idx;
+    idx.dev_id = 1;
+    idx.port_id = 1;
+            
+    opened_rnic = global_rdma_ctrl->open_device(idx);
+    std::cout << "RDMA open device!" << std::endl;
+
+    // only one remote node now, which is at the end of nodes vector
+    remote_nodes.push_back(remote);
+    GetMRMeta(remote);
+
+    // Alloc rdma memory region
+    AllocMR(mem, mem_sz);
+
+    qp_man_ = new QPManager(nid); //LCY: this param need to be global tid?
+    BuildQPConnection(qp_man_); 
+}
+
+void RDMA_Device::GetMRMeta(const Node& node) {
+    // LCY： what mr_id used for?
+    while (QP::get_remote_mr(node.hostname, node.tcp_port, REMOTE_MR_ID, &remote_mr_) != SUCC) {
+        usleep(2000);
+    }
+    std::cout << "Get remote data!" << std::endl;
+}
+
+void RDMA_Device::AllocMR(char *mem, uint64_t mem_sz) {
+    RDMA_ASSERT(global_rdma_ctrl->register_memory(LOCAL_MR_ID, mem, mem_sz, opened_rnic));
+    std::cout << "Alloc memory region!" << std::endl;
+}
+
+const MemoryAttr& RDMA_Device::GetRemoteMr(int node_id) {
+    return remote_mr_;
+}
+
+void RDMA_Device::BuildQPConnection(QPManager * qp_manager) {
+    MemoryAttr remote_mr = GetRemoteMr();
+    MemoryAttr local_mr = global_rdma_ctrl->get_local_mr(LOCAL_MR_ID);
+    
+    RCQP * qp = global_rdma_ctrl->create_rc_qp(create_rc_idx(SINGLE_REMOTE_ID, qp_manager->global_tid),
+                                                    opened_rnic, &local_mr);
+                                                    
+    ConnStatus rc;
+    do {
+        rc = qp->connect(remote_nodes[0].hostname, remote_nodes[0].tcp_port); // check paramenters
+        if (rc == SUCC) {
+            qp->bind_remote_mr(remote_mr); 
+            qp_manager->data_qps[0] = qp; // so ugly, change it later
+        }
+        usleep(2000);
+    } while (rc != SUCC);
+}
+
+/* This is a sync read completion
+*  param:
+*  dst_tid: remote node thread id
+*  dst_nid: remote node node id
+*  local: address of the buffer to read from / write to
+*  size: length of the buffer in bytes  
+*  off: start offset of remote memory block to access
+*/
+int RDMA_Device::RdmaRead(int dst_tid, int dst_nid, char *local, uint64_t size, uint64_t off) {
+    RCQP * qp = qp_man_->GetRemoteDataQPWithNodeID(dst_nid); // TODO(big): this should be a combined id which contain both dstnid + dsttid
+        
+    auto rc = qp->post_send(IBV_WR_RDMA_READ, local, size, off, IBV_SEND_SIGNALED);
+    if(rc != SUCC) {
+        RDMA_LOG(ERROR) << "client: post read failed. rc=" << rc ;
+        return -1;
+    }
+    ibv_wc wc;
+    rc = qp->poll_till_completion(wc, no_timeout);
+    if(rc != SUCC) {
+        RDMA_LOG(ERROR) << "client: poll read failed. rc=" << rc;
+        return -1;
+    }
+    return 0;
+}
+
+int RDMA_Device::RdmaWrite(int dst_tid, int dst_nid, char *local, uint64_t size, uint64_t off) {
+    RCQP * qp = qp_man_->GetRemoteDataQPWithNodeID(dst_nid);
+
+    int flags = IBV_SEND_SIGNALED;
+
+    auto rc = qp->post_send(IBV_WR_RDMA_WRITE, local, size, off, flags);
+    if (rc != SUCC) {
+        RDMA_LOG(ERROR) << "client: post write fail.  rc = " << rc;
+        return -1;
+    }
+    // TODO(big) batch polling ? see pendind_qps in ford
+    ibv_wc wc{};
+    int poll_rc = qp->poll_send_completion(wc);
+    if(poll_rc != SUCC) {
+        RDMA_LOG(ERROR) << "client: poll write fail. rc=" << rc;
+        return -1;
+    }
+    return 0;
+}
+
+void RDMA_init(int num_nodes,  int num_threads, int nid, char *mem, uint64_t mem_sz, vector<Node> & nodes, Node & remote) {
     uint64_t t = timer::get_usec();
 
     // init RDMA device
     RDMA &rdma = RDMA::get_rdma();
-    rdma.init_dev(num_nodes, num_threads, nid, mem, mem_sz, nodes);
+    rdma.init_dev(num_nodes, num_threads, nid, mem, mem_sz, nodes, remote);
 
     t = timer::get_usec() - t;
     cout << "INFO: initializing RDMA done (" << t / 1000  << " ms)" << endl;
 }
-
-#else
-
-void RDMA_init(int num_nodes,  int num_threads, int nid, char *mem, uint64_t mem_sz, vector<Node> & nodes) {
-    std::cout << "This system is compiled without RDMA support." << std::endl;
-}
-
-#endif
-
-

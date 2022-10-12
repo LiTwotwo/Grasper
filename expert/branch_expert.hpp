@@ -11,7 +11,7 @@ Authors: Nick Fang (jcfang6@cse.cuhk.edu.hk)
 // Copy incoming data to sub branches
 class BranchExpert : public AbstractExpert {
  public:
-    BranchExpert(int id, DataStore* data_store, int num_thread, AbstractMailbox* mailbox, CoreAffinity* core_affinity) : AbstractExpert(id, data_store, core_affinity), num_thread_(num_thread), mailbox_(mailbox) {}
+    BranchExpert(int id, MetaData* metadata, int num_thread, AbstractMailbox* mailbox, CoreAffinity* core_affinity) : AbstractExpert(id, metadata, core_affinity), num_thread_(num_thread), mailbox_(mailbox) {}
     void process(const vector<Expert_Object> & experts,  Message & msg) {
         int tid = TidMapper::GetInstance()->GetTid();
 
@@ -20,7 +20,7 @@ class BranchExpert : public AbstractExpert {
             get_steps(experts[msg.meta.step], step_vec);
 
             vector<Message> msg_vec;
-            msg.CreateBranchedMsg(experts, step_vec, num_thread_, data_store_, core_affinity_, msg_vec);
+            msg.CreateBranchedMsg(experts, step_vec, num_thread_, metadata_, core_affinity_, msg_vec);
 
             for (auto& m : msg_vec) {
                 mailbox_->Send(tid, m);

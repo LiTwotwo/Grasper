@@ -1,0 +1,10 @@
+build/
+release/
+debug/
+cmake/modules/glog.cmake
+cmake/modules/ibverbs.cmake
+cmake/modules/tbb.cmake
+cmake/modules/zmq.cmake
+.vscode/
+data/
+*.log

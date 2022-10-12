@@ -31,10 +31,11 @@ struct branch_data_base {
 template<typename T = BranchData::branch_data_base>
 class LabelledBranchExpertBase :  public AbstractExpert {
     static_assert(std::is_base_of<BranchData::branch_data_base, T>::value, "T must derive from barrier_data_base");
-    using BranchDataTable = tbb::concurrent_hash_map<mkey_t, T, MkeyHashCompare>;
 
  public:
-    LabelledBranchExpertBase(int id, DataStore* data_store, int num_thread, AbstractMailbox* mailbox, CoreAffinity* core_affinity, msg_id_alloc* allocator): AbstractExpert(id, data_store, core_affinity), num_thread_(num_thread), mailbox_(mailbox), id_allocator_(allocator) {}
+    using BranchDataTable = tbb::concurrent_hash_map<mkey_t, T, MkeyHashCompare>;
+
+    LabelledBranchExpertBase(int id, MetaData* metadata, int num_thread, AbstractMailbox* mailbox, CoreAffinity* core_affinity, msg_id_alloc* allocator): AbstractExpert(id, metadata, core_affinity), num_thread_(num_thread), mailbox_(mailbox), id_allocator_(allocator) {}
 
     void process(const vector<Expert_Object> & experts,  Message & msg) {
         int tid = TidMapper::GetInstance()->GetTid();
@@ -104,7 +105,7 @@ class LabelledBranchExpertBase :  public AbstractExpert {
         get_steps(experts[msg.meta.step], step_vec);
 
         vector<Message> msg_vec;
-        msg.CreateBranchedMsgWithHisLabel(experts, step_vec, msg_id, num_thread_, data_store_, core_affinity_, msg_vec);
+        msg.CreateBranchedMsgWithHisLabel(experts, step_vec, msg_id, num_thread_, metadata_, core_affinity_, msg_vec);
         for (auto& msg : msg_vec) {
             mailbox_->Send(tid, msg);
         }
@@ -183,7 +184,7 @@ struct branch_filter_data : branch_data_base {
 
 class BranchFilterExpert : public LabelledBranchExpertBase<BranchData::branch_filter_data> {
  public:
-    BranchFilterExpert(int id, DataStore* data_store_, int num_thread, AbstractMailbox* mailbox, CoreAffinity* core_affinity, msg_id_alloc* allocator): LabelledBranchExpertBase<BranchData::branch_filter_data>(id, data_store_, num_thread, mailbox, core_affinity, allocator) {}
+    BranchFilterExpert(int id, MetaData* metadata_, int num_thread, AbstractMailbox* mailbox, CoreAffinity* core_affinity, msg_id_alloc* allocator): LabelledBranchExpertBase<BranchData::branch_filter_data>(id, metadata_, num_thread, mailbox, core_affinity, allocator) {}
 
  private:
     void process_spawn(Message & msg, BranchDataTable::accessor& ac) {
@@ -247,7 +248,7 @@ class BranchFilterExpert : public LabelledBranchExpertBase<BranchData::branch_fi
             // remove last branch info
             msg.meta.branch_infos.pop_back();
             vector<Message> v;
-            msg.CreateNextMsg(experts, data, num_thread_, data_store_, core_affinity_, v);
+            msg.CreateNextMsg(experts, data, num_thread_, metadata_, core_affinity_, v);
             for (auto& m : v) {
                 mailbox_->Send(tid, m);
             }

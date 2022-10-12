@@ -58,7 +58,8 @@ class Config {
     int global_num_workers;
     int global_num_threads;
 
-
+    int global_vertex_sz_gb;
+    int global_edge_sz_gb;
     int global_vertex_property_kv_sz_gb;
     int global_edge_property_kv_sz_gb;
 
@@ -82,6 +83,12 @@ class Config {
 
     // ================================================================
     // mutable_config
+
+    uint64_t vertex_sz;
+    uint64_t vertex_offset;
+
+    uint64_t edge_sz;
+    uint64_t edge_offset;
 
     // kvstore = vertex_property_kv_sz + edge_property_kv_sz
     uint64_t kvstore_sz;
@@ -108,14 +115,19 @@ class Config {
     // remote_head_buffer_offset = local_head_buffer_sz * local_head_buffer_offset
     uint64_t remote_head_buffer_offset;
 
-    // buffer_sz = kvstore_sz + send_buffer_sz + recv_buffer_sz + local_head_buffer_sz +remote_head_buffer_sz
-    uint64_t buffer_sz;
+    // remote_buffer_sz = vertex_sz + edge_sz + kvstore_sz
+    uint64_t remote_buffer_sz;
+
+    // local_buffer_sz = send_buffer_sz + recv_buffer_sz + local_head_buffer_sz + remote_head_buffer_sz
+    uint64_t local_buffer_sz;
 
     // head [key region] / (head + entry) [Total] * 100
     int key_value_ratio_in_rdma;
 
     // ================================================================
     // settle down after data loading
+    char * vtx_store;
+    char * edge_store;
     char * kvstore;
     char * send_buf;
     char * recv_buf;
@@ -228,6 +240,22 @@ class Config {
             global_num_threads = val;
         } else {
             fprintf(stderr, "must enter the NUM_THREADS. exits.\n");
+            exit(-1);
+        }
+
+        val = iniparser_getint(ini, "SYSTEM:VTX_SZ_GB", val_not_found);
+        if(val != val_not_found) {
+            global_vertex_sz_gb = val;
+        } else {
+            fprintf(stderr, "must enter the VTX_SZ_GB. exits\n");
+            exit(-1);
+        }
+
+        val = iniparser_getint(ini, "SYSTEM:EDGE_SZ_GB", val_not_found);
+        if(val != val_not_found) {
+            global_edge_sz_gb = val;
+        } else {
+            fprintf(stderr, "must enter the EDGE_SZ_GB. exits\n");
             exit(-1);
         }
 
@@ -361,12 +389,26 @@ class Config {
 
         iniparser_freedict(ini);
 
-        kvstore_sz = GiB2B(global_vertex_property_kv_sz_gb) + GiB2B(global_edge_property_kv_sz_gb);
-        kvstore_offset = 0;
+        // remote
+        vertex_sz = GiB2B(global_vertex_sz_gb);
+        vertex_offset = 0;
 
+        edge_sz = GiB2B(global_edge_sz_gb);
+        edge_offset = vertex_sz + vertex_offset;
+
+        kvstore_sz = GiB2B(global_vertex_property_kv_sz_gb) + GiB2B(global_edge_property_kv_sz_gb);
+        kvstore_offset = edge_offset + edge_sz;
+
+        remote_buffer_sz = vertex_sz + edge_sz + kvstore_sz;
+            
+        // remote init hdfs
+        hdfs_init(HDFS_HOST_ADDRESS, HDFS_PORT);
+
+        // local
+            
         // one more thread for worker main thread
         send_buffer_sz = (global_num_threads + 1) * MiB2B(global_per_send_buffer_sz_mb);
-        send_buffer_offset = kvstore_offset + kvstore_sz;
+        send_buffer_offset = 0;
 
         recv_buffer_sz = (global_num_workers - 1) * global_num_threads * MiB2B(global_per_recv_buffer_sz_mb);
         recv_buffer_offset = send_buffer_offset + send_buffer_sz;
@@ -377,10 +419,7 @@ class Config {
         remote_head_buffer_sz = (global_num_workers - 1) * global_num_threads * sizeof(uint64_t);
         remote_head_buffer_offset = local_head_buffer_sz + local_head_buffer_offset;
 
-        buffer_sz = kvstore_sz + send_buffer_sz + recv_buffer_sz + local_head_buffer_sz + remote_head_buffer_sz;
-
-        // init hdfs
-        hdfs_init(HDFS_HOST_ADDRESS, HDFS_PORT);
+        local_buffer_sz = send_buffer_sz + recv_buffer_sz + local_head_buffer_sz + remote_head_buffer_sz;
 
         LOG(INFO) << DebugString();
     }
@@ -397,21 +436,24 @@ class Config {
         ss << "HDFS_OUTPUT_PATH : " << HDFS_OUTPUT_PATH << endl;
         ss << "SNAPSHOT_PATH : " << SNAPSHOT_PATH << endl;
 
-        ss << "global_num_workers : " << global_num_workers << endl;
-        ss << "global_num_threads : " << global_num_threads << endl;
-
+        ss << "global_vertex_sz_gb : " << global_vertex_sz_gb << endl;
+        ss << "global_edge_sz_gb : " <<  global_edge_sz_gb << endl;
         ss << "global_vertex_property_kv_sz_gb : " << global_vertex_property_kv_sz_gb << endl;
-        ss << "global_edge_property_kv_sz_gb : " << global_edge_property_kv_sz_gb << endl;
+        ss << "global_edge_property_kv_sz_gb : " << global_edge_property_kv_sz_gb << endl;        
+
+        ss << "key_value_ratio : " << key_value_ratio_in_rdma << endl;
+
         ss << "global_per_send_buffer_sz_mb : " << global_per_send_buffer_sz_mb << endl;
         ss << "global_per_recv_buffer_sz_mb : " << global_per_recv_buffer_sz_mb << endl;
-        ss << "key_value_ratio : " << key_value_ratio_in_rdma << endl;
+
+        ss << "global_num_workers : " << global_num_workers << endl;
+        ss << "global_num_threads : " << global_num_threads << endl;
 
         ss << "global_use_rdma : " << global_use_rdma << endl;
         ss << "global_enable_caching : " << global_enable_caching << endl;
         ss << "global_enable_core_binding : " << global_enable_core_binding << endl;
         ss << "global_enable_expert_division : " << global_enable_expert_division << endl;
         ss << "global_enable_workstealing : " << global_enable_workstealing << endl;
-
         return ss.str();
     }
 };

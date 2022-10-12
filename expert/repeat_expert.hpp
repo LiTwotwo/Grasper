@@ -11,7 +11,7 @@ Authors: Chenghuan Huan (chhuang@cse.cuhk.edu.hk)
 // Copy incoming data to sub branches
 class RepeatExpert : public AbstractExpert {
  public:
-    RepeatExpert(int id, DataStore* data_store, int num_thread, AbstractMailbox* mailbox, CoreAffinity* core_affinity) : AbstractExpert(id, data_store, core_affinity), num_thread_(num_thread), mailbox_(mailbox) {}
+    RepeatExpert(int id, MetaData* metadata, int num_thread, AbstractMailbox* mailbox, CoreAffinity* core_affinity) : AbstractExpert(id, metadata, core_affinity), num_thread_(num_thread), mailbox_(mailbox) {}
 
     void process(const vector<Expert_Object> & experts,  Message & msg) {
         int tid = TidMapper::GetInstance()->GetTid();
@@ -21,7 +21,7 @@ class RepeatExpert : public AbstractExpert {
             get_steps(experts[msg.meta.step], step_vec);
 
             vector<Message> msg_vec;
-            msg.CreateBranchedMsg(experts, step_vec, num_thread_, data_store_, core_affinity_, msg_vec);
+            msg.CreateBranchedMsg(experts, step_vec, num_thread_, metadata_, core_affinity_, msg_vec);
 
             for (auto& m : msg_vec) {
                 mailbox_->Send(tid, m);

@@ -49,6 +49,7 @@
 
 #include <cassert>
 #include <cstring>
+#include <iostream>
 
 #include <algorithm>
 #include <exception>

@@ -47,8 +47,9 @@ class Master {
     void Init() {
         socket_ = new zmq::socket_t(context_, ZMQ_REP);
         char addr[64];
-        sprintf(addr, "tcp://*:%d", node_.tcp_port);
+        sprintf(addr, "tcp://*:%d", node_.tcp_port + 1);
         socket_->bind(addr);
+        cout << "Master bind addr:" << addr << endl; 
     }
 
     void ProgListener() {
@@ -96,6 +97,7 @@ class Master {
 
             int client_id;
             um >> client_id;
+            cout << "Process REQ client id = " << client_id << endl;
             if (client_id == -1) {  // first connection, obtain the global client ID
                 client_id = ++client_num;
             }

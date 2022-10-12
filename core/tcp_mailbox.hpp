@@ -65,7 +65,7 @@ class TCPMailbox : public AbstractMailbox {
 
     ~TCPMailbox();
 
-    void Init(vector<Node> & nodes) override;
+    void Init(vector<Node> & nodes, Node & remote) override;
     int Send(int tid, const Message & msg) override;
     void Recv(int tid, Message & msg) override;
     bool TryRecv(int tid, Message & msg) override;

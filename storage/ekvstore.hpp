@@ -17,7 +17,7 @@ Authors: Changji Li (cjli@cse.cuhk.edu.hk)
 #include "base/type.hpp"
 #include "base/serialization.hpp"
 #include "base/node_util.hpp"
-#include "core/buffer.hpp"
+#include "core/remote_buffer.hpp"
 #include "storage/layout.hpp"
 #include "utils/mymath.hpp"
 #include "third_party/zmq.hpp"
@@ -35,30 +35,30 @@ Authors: Changji Li (cjli@cse.cuhk.edu.hk)
 
 class EKVStore {
  public:
-    EKVStore(Buffer * buf);
+    EKVStore(RemoteBuffer * buf);
 
-    void init(vector<Node> & nodes);
+    void init(GraphMeta * graph_meta, vector<Node> & nodes);
 
     // Insert a list of Edge properties
     void insert_edge_properties(vector<EProperty*> & eplist);
 
-    // Get properties by key locally
-    void get_property_local(uint64_t pid, value_t & val);
+   //  // Get properties by key locally
+   //  void get_property_local(uint64_t pid, value_t & val);
 
-    // Get properties by key remotely
-    void get_property_remote(int tid, int dst_nid, uint64_t pid, value_t & val);
+   //  // Get properties by key remotely
+   //  void get_property_remote(int tid, int dst_nid, uint64_t pid, value_t & val);
 
-    // Get label by key locally
-    void get_label_local(uint64_t pid, label_t & label);
+   //  // Get label by key locally
+   //  void get_label_local(uint64_t pid, label_t & label);
 
-    // Get label by key remotely
-    void get_label_remote(int tid, int dst_nid, uint64_t pid, label_t & label);
+   //  // Get label by key remotely
+   //  void get_label_remote(int tid, int dst_nid, uint64_t pid, label_t & label);
 
-    // Get key locally
-    void get_key_local(uint64_t pid, ikey_t & key);
+   //  // Get key locally
+   //  void get_key_local(uint64_t pid, ikey_t & key);
 
-    // Get key remotely
-    void get_key_remote(int tid, int dst_nid, uint64_t pid, ikey_t & key);
+   //  // Get key remotely
+   //  void get_key_remote(int tid, int dst_nid, uint64_t pid, ikey_t & key);
 
     // analysis
     void print_mem_usage();
@@ -68,7 +68,7 @@ class EKVStore {
 
  private:
     Config * config_;
-    Buffer * buf_;
+    RemoteBuffer * buf_;
 
     static const int NUM_LOCKS = 1024;
 
@@ -118,13 +118,13 @@ class EKVStore {
 
     uint64_t sync_fetch_and_alloc_values(uint64_t n);
 
-    // For TCP use
-    zmq::context_t context;
-    vector<zmq::socket_t *> requesters;
-    pthread_spinlock_t req_lock;
+   //  // For TCP use
+   //  zmq::context_t context;
+   //  vector<zmq::socket_t *> requesters;
+   //  pthread_spinlock_t req_lock;
 
-    void SendReq(int dst_nid, ibinstream & m);
-    bool RecvRep(int nid, obinstream & um);
+   //  void SendReq(int dst_nid, ibinstream & m);
+   //  bool RecvRep(int nid, obinstream & um);
 };
 
 #endif /* EKVSTORE_HPP_ */

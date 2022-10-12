@@ -99,7 +99,7 @@ obinstream& operator>>(obinstream& m, ikey_t& p);
 
 bool operator == (const ikey_t &p1, const ikey_t &p2);
 
-enum {VID_BITS = 26};  // <32; the total # of vertices should no be more than 2^26
+enum {VID_BITS = 19};  // <32; the total # of vertices should no be more than 2^26
 enum {EID_BITS = (VID_BITS * 2)};  // eid = v1_id | v2_id (52 bits)
 enum {PID_BITS = (64 - EID_BITS)};  // 12, the total # of property should no be more than 2^PID_BITS
 
@@ -121,7 +121,7 @@ struct vid_t {
         return *this;
     }
 
-    uint32_t value() {
+    inline uint32_t value() {
         return (uint32_t)vid;
     }
 
@@ -180,6 +180,11 @@ struct eid_t {
 
     uint64_t hash() {
         return mymath::hash_u64(value());  // the standard hash is too slow (i.e., std::hash<uint64_t>()(r))
+    }
+
+    uint64_t tmp_hash(uint64_t num) {
+        // Lazy version hash, not that conflicts will effect correctness
+        return hash() % num;
     }
 };
 
