@@ -64,7 +64,7 @@ void DataStore::LoadDataFromHDFS() {
     cout << "Remote Node " << node_.get_local_rank() << " get_string_indexes() DONE !" << endl;
 
     get_vertices();
-    cout << "Remote Node " << node_.get_local_rank() << " Get_vertices() DONE !" << endl;
+    cout << "Remote Node " << node_.get_local_rank() << " Get_vertices() DONE !" << endl; // tmp vertices have been prepared
 
     // if (!snapshot->TestRead("vkvstore")) {
     //     get_vplist();
@@ -123,11 +123,11 @@ void DataStore::DataConverter() {
                 m_v->ext_vp_ptr = ptr_t(sizeof(label_t) * num_ext_vp, vp_ext_offset);
                 m_vp_ext = (label_t *) (v_table_->get_ext() + vp_ext_offset);
             }
-            for(int i = 0; i < num_vp; ++i) {
-                if(i < VP_NBS)
-                    m_v->vp_list[i] = vp_buf[i]->pkeys[i];
+            for(int j = 0; j < num_vp; ++j) {
+                if(j < VP_NBS)
+                    m_v->vp_list[j] = vp_buf[i]->pkeys[j];
                 else 
-                    m_vp_ext[i-VP_NBS] = vp_buf[i]->pkeys[i];
+                    m_vp_ext[j-VP_NBS] = vp_buf[i]->pkeys[j];
             }
         }
         // ==================================================
@@ -330,7 +330,6 @@ void DataStore::get_string_indexes() {
 }
 
 void DataStore::get_vertices() {
-    // TODO(big) load vertex in remote server
     // MPISnapshot* snapshot = MPISnapshot::GetInstance();
     // // break if the vtxs has already been finished.
     // if (snapshot->TestRead("datastore_v_table")) {

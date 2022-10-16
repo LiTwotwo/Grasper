@@ -74,8 +74,8 @@ Vertex * VertexTable::insert(vid_t id) {
     return &vtx_array[i_id];
 }
 
-void * VertexTable::get_ext() {
-    return (void *) ext;
+char * VertexTable::get_ext() {
+    return ext;
 }
 
 Vertex * VertexTable::find(vid_t id) {

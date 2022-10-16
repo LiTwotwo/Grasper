@@ -34,7 +34,7 @@ public:
 
     Vertex * find(vid_t id);
 
-    void * get_ext();
+    char * get_ext();
     
     // sync alloc size bytes in ext space  
     uint64_t sync_alloc_ext(uint64_t size);

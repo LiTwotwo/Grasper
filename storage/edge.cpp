@@ -51,8 +51,8 @@ void EdgeTable::init(GraphMeta * graph_meta) {
     graph_meta->e_num = 0;
 }
 
-void * EdgeTable::get_ext() {
-    return (void *) ext;
+char* EdgeTable::get_ext() {
+    return ext;
 }
 
 Edge * EdgeTable::insert(eid_t id) {
@@ -62,7 +62,7 @@ Edge * EdgeTable::insert(eid_t id) {
     // cout << "e_id = " << bitset<64>(id.value()) << " hashed_id == " << v_id << " edge array id = " << edge_array[v_id].id.value() << endl;
     // assert(edge_array[v_id].id.value() ==  0);
     if(edge_array[v_id].id.value() != 0) {
-        cout << "e_id = " << bitset<64>(id.value()) << " hashed_id == " << v_id << " edge array id = " << edge_array[v_id].id.value() << endl;
+        // cout << "e_id = " << bitset<64>(id.value()) << " hashed_id == " << v_id << " edge array id = " << edge_array[v_id].id.value() << endl;
     }
     edge_array[v_id].id = id;
     return &edge_array[v_id];

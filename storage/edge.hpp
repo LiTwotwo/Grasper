@@ -31,7 +31,7 @@ public:
 
     Edge * insert(eid_t id);
 
-    void * get_ext();
+    char * get_ext();
 
     uint64_t sync_alloc_ext(uint64_t size);
 
