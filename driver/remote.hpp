@@ -192,14 +192,11 @@ class Remote {
         // fflush(stdout);
         
         // Send graphmeta
-        cout << data_store_->GetGraphMeta().DebugString();
         ibinstream m;
         m << data_store_->GetGraphMeta();
 
         size_t metasize = m.size();
-        cout << "meta size = " << metasize << endl;
         zmq::message_t msg(&metasize, sizeof(size_t));
-        // sender_->send(msg, ZMQ_SNDMORE);
         sender_->send(msg);
 
         zmq::message_t metamsg(metasize);

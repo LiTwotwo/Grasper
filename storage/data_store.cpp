@@ -11,14 +11,12 @@ DataStore::DataStore(Node & node, AbstractIdMapper * id_mapper, RemoteBuffer * b
     // TODO(big) new datastore both in remote and local server
     config_ = Config::GetInstance();
     v_table_ = NULL;
-    e_table_ = NULL;
     vpstore_ = NULL;
     epstore_ = NULL;
 }
 
 DataStore::~DataStore() {
     delete v_table_;
-    delete e_table_;
     delete vpstore_;
     delete epstore_;
 }
@@ -26,17 +24,11 @@ DataStore::~DataStore() {
 void DataStore::Init(vector<Node> & nodes) {
     // TODO(big) init vkv ekv vtable etable in remote and local 
     v_table_ = new VertexTable(remote_buffer_);
-    e_table_ = new EdgeTable(remote_buffer_);
     vpstore_ = new VKVStore(remote_buffer_);
     epstore_ = new EKVStore(remote_buffer_);
     v_table_->init(&graph_meta_);
-    e_table_->init(&graph_meta_);
     vpstore_->init(&graph_meta_, nodes);
     epstore_->init(&graph_meta_, nodes);
-
-#ifdef TEST_WITH_COUNT
-    InitCounter(); 
-#endif
 }
 
 GraphMeta DataStore::GetGraphMeta() {
@@ -63,6 +55,12 @@ void DataStore::LoadDataFromHDFS() {
     get_string_indexes();
     cout << "Remote Node " << node_.get_local_rank() << " get_string_indexes() DONE !" << endl;
 
+    // if (!snapshot->TestRead("ekvstore")) {
+    //     get_eplist();
+    // }
+    get_eplist();
+    cout << "Remote Node " << node_.get_local_rank() << " Get_eplist() DONE !" << endl;
+
     get_vertices();
     cout << "Remote Node " << node_.get_local_rank() << " Get_vertices() DONE !" << endl; // tmp vertices have been prepared
 
@@ -71,12 +69,6 @@ void DataStore::LoadDataFromHDFS() {
     // }
     get_vplist();
     cout << "Remote Node " << node_.get_local_rank() << " Get_vplist() DONE !" << endl;
-
-    // if (!snapshot->TestRead("ekvstore")) {
-    //     get_eplist();
-    // }
-    get_eplist();
-    cout << "Remote Node " << node_.get_local_rank() << " Get_eplist() DONE !" << endl;
 }
 
 // void DataStore::ReadSnapshot() {
@@ -107,30 +99,11 @@ void DataStore::DataConverter() {
             memcpy((void *)m_v, (void *)vertices[i], sizeof(Vertex));
         }
 
-        //==================insert vp list to struct vertex
-        for (int i = 0 ; i < vp_buf.size(); ++i) {
-            Vertex* m_v = v_table_->find(vp_buf[i]->vid);
-            if (!m_v) {
-                cout << "ERROR: FAILED TO MATCH ONE ELEMENT in vp_buf" << endl;
-                exit(-1);
-            }
-            int num_vp = vp_buf[i]->pkeys.size();
-            int num_ext_vp = num_vp - VP_NBS;
-            uint64_t vp_ext_offset = 0;
-            label_t* m_vp_ext = nullptr;
-            if(num_ext_vp > 0) {
-                vp_ext_offset = v_table_->sync_alloc_ext(sizeof(label_t) * num_ext_vp);
-                m_v->ext_vp_ptr = ptr_t(sizeof(label_t) * num_ext_vp, vp_ext_offset);
-                m_vp_ext = (label_t *) (v_table_->get_ext() + vp_ext_offset);
-            }
-            for(int j = 0; j < num_vp; ++j) {
-                if(j < VP_NBS)
-                    m_v->vp_list[j] = vp_buf[i]->pkeys[j];
-                else 
-                    m_vp_ext[j-VP_NBS] = vp_buf[i]->pkeys[j];
-            }
+        //==================insert vtx label to struct vertex
+        for(auto it = vtx_label.begin(); it != vtx_label.end(); ++it) {
+            Vertex* m_v = v_table_->find(vid_t(it->first));
+            m_v->label = it->second;
         }
-        // ==================================================
 
         // clean the vp_buf
         for (int i = 0 ; i < vp_buf.size(); i++) delete vp_buf[i];
@@ -140,14 +113,6 @@ void DataStore::DataConverter() {
     //     if (node_.get_local_rank() == MASTER_RANK)
     //         printf("DataConverter snapshot->TestRead('datastore_v_table')\n");
     // }
-
-    // if (!snapshot->TestRead("datastore_e_table")) {
-        for (int i = 0 ; i < edges.size(); i++) {
-            Edge * m_e = e_table_->insert(edges[i]->id);
-            memcpy((void *)m_e, (void *)edges[i], sizeof(Edge));
-        }
-    // }
-    vector<Edge*>().swap(edges);
 
     // LCY: tmply keep property insert funcitons
     //      but may need to buffer some hash meta(can reference FORD)  
@@ -171,52 +136,6 @@ void DataStore::DataConverter() {
         vector<EProperty*>().swap(eplist);
     // }
 }
-
-// void DataStore::InsertAggData(agg_t key, vector<value_t> & data) {
-//     lock_guard<mutex> lock(agg_mutex);
-
-//     unordered_map<agg_t, vector<value_t>>::iterator itr = agg_data_table.find(key);
-//     if (itr == agg_data_table.end()) {
-//         // Not Found, insert
-//         agg_data_table.insert(pair<agg_t, vector<value_t>>(key, data));
-//     } else {
-//         agg_data_table.at(key).insert(agg_data_table.at(key).end(), data.begin(), data.end());
-//     }
-// }
-
-// void DataStore::GetAggData(agg_t key, vector<value_t> & data) {
-//     lock_guard<mutex> lock(agg_mutex);
-
-//     unordered_map<agg_t, vector<value_t>>::iterator itr = agg_data_table.find(key);
-//     if (itr != agg_data_table.end()) {
-//         data = itr->second;
-//     }
-// }
-
-// void DataStore::DeleteAggData(agg_t key) {
-//     lock_guard<mutex> lock(agg_mutex);
-
-//     unordered_map<agg_t, vector<value_t>>::iterator itr = agg_data_table.find(key);
-//     if (itr != agg_data_table.end()) {
-//         agg_data_table.erase(itr);
-//     }
-// }
-
-// void DataStore::AccessVProperty(uint64_t vp_id_v, value_t & val) {
-//     // TODO(big) delete use when RDMA is disabled
-//     vpstore_->get_property_local(vp_id_v, val);
-//     #ifdef TEST_WITH_COUNT
-//         RecordVp(val.content.size());
-//     #endif
-// }
-
-// void DataStore::AccessEProperty(uint64_t ep_id_v, value_t & val) {
-//     // TODO(big) delete use when RDMA is disabled
-//     epstore_->get_property_local(ep_id_v, val);
-//     #ifdef TEST_WITH_COUNT
-//         RecordEp(val.content.size());
-//     #endif
-// }
 
 void DataStore::get_string_indexes() {
     // TODO(big) string index cached in local
@@ -398,18 +317,24 @@ Vertex* DataStore::to_vertex(char* line) {
     int num_in_nbs = atoi(pch);
     int in_ext_num = num_in_nbs - IN_NBS;
     uint64_t in_ext_offset;
-    vid_t* m_in_ext;
+    Nbs_pair* m_in_ext;
     if (in_ext_num > 0) {
-        in_ext_offset = v_table_->sync_alloc_ext(sizeof(vid_t)*in_ext_num);
-        v->ext_in_nbs_ptr = ptr_t(sizeof(vid_t)*in_ext_num, in_ext_offset);
-        m_in_ext = (vid_t *)(v_table_->get_ext() + in_ext_offset);
+        in_ext_offset = v_table_->sync_alloc_ext(sizeof(Nbs_pair)*in_ext_num);
+        v->ext_in_nbs_ptr = ptr_t(sizeof(Nbs_pair)*in_ext_num, in_ext_offset);
+        m_in_ext = (Nbs_pair*)(v_table_->get_ext() + in_ext_offset);
     }
     for (int i = 0 ; i < num_in_nbs; ++i) {
         pch = strtok(NULL, " ");
-        if (i < IN_NBS)
-            v->in_nbs[i] = atoi(pch); // LCY: need to change to vid type?
+        int nb_vid = atoi(pch);
+        eid_t nb_eid(nb_vid, vid.value());
+        label_t nb_label = edges_label[nb_eid.value()];
+        if (i < IN_NBS) {
+            v->in_nbs[i].vid = nb_vid; 
+            v->in_nbs[i].label = nb_label;
+        }
         else {
-            m_in_ext[i-IN_NBS] = atoi(pch);
+            m_in_ext[i-IN_NBS].vid = nb_vid;
+            m_in_ext[i-IN_NBS].label = nb_label;
         }
     }
 
@@ -417,18 +342,24 @@ Vertex* DataStore::to_vertex(char* line) {
     int num_out_nbs = atoi(pch);
     int out_ext_num = num_out_nbs - OUT_NBS;
     uint64_t out_ext_offset;
-    vid_t* m_out_ext;
+    Nbs_pair* m_out_ext;
     if (out_ext_num > 0) {
-        out_ext_offset = v_table_->sync_alloc_ext(sizeof(vid_t)*out_ext_num);
-        v->ext_out_nbs_ptr = ptr_t(sizeof(vid_t)*out_ext_num, out_ext_offset);
-        m_out_ext = (vid_t *)(v_table_->get_ext() + out_ext_offset);
+        out_ext_offset = v_table_->sync_alloc_ext(sizeof(Nbs_pair)*out_ext_num);
+        v->ext_out_nbs_ptr = ptr_t(sizeof(Nbs_pair)*out_ext_num, out_ext_offset);
+        m_out_ext = (Nbs_pair *)(v_table_->get_ext() + out_ext_offset);
     }
     for (int i = 0 ; i < num_out_nbs; ++i) {
         pch = strtok(NULL, " ");
-        if (i < OUT_NBS)
-            v->out_nbs[i] = atoi(pch);
+        int nb_vid = atoi(pch);
+        eid_t nb_eid(vid.value(), nb_vid);
+        label_t nb_label = edges_label[nb_eid.value()];
+        if (i < OUT_NBS) {
+            v->out_nbs[i].vid = nb_vid;
+            v->out_nbs[i].label = nb_label;
+        }
         else {
-            m_out_ext[i-OUT_NBS] = atoi(pch);
+            m_out_ext[i-OUT_NBS].vid = nb_vid;
+            m_out_ext[i-OUT_NBS].label = nb_label;
         }
     }
     return v;
@@ -489,13 +420,7 @@ void DataStore::to_vp(char* line, vector<VProperty*> & vplist, vector<vp_list*> 
 
     pch = strtok(NULL, "\t");
     label_t label = (label_t)atoi(pch);
-
-    // insert label to VProperty
-    V_KVpair v_pair;
-    v_pair.key = vpid_t(vid, 0);
-    Tool::str2int(to_string(label), v_pair.value);
-    // push to property_list of v
-    vp->plist.push_back(v_pair);
+    vtx_label[vid.value()] = label;
 
     pch = strtok(NULL, "");
     string s(pch);
@@ -558,7 +483,6 @@ void DataStore::load_eplist(const char* inpath) {
         reader.read_line();
         if (!reader.eof()) {
             to_ep(reader.get_line(), eplist);
-            graph_meta_.e_num++;
          } else {
             break;
          }
@@ -570,31 +494,24 @@ void DataStore::load_eplist(const char* inpath) {
 // Format
 // in-v[\t] out-v[\t] label[\t] [kid:value,kid:value,...]
 void DataStore::to_ep(char* line, vector<EProperty*> & eplist) {
-    Edge * e = new Edge;
     EProperty * ep = new EProperty;
-
+    // TODO(big) which is out and in still need to check
     uint64_t atoi_time = timer::get_usec();
     char * pch;
     pch = strtok(line, "\t");
-    int out_v = atoi(pch);
-    pch = strtok(NULL, "\t");
     int in_v = atoi(pch);
+    pch = strtok(NULL, "\t");
+    int out_v = atoi(pch);
 
     eid_t eid(in_v, out_v);
-    e->id = eid;
     ep->id = eid;
 
     pch = strtok(NULL, "\t");
     label_t label = (label_t)atoi(pch);
-    // insert label to EProperty
-    E_KVpair e_pair;
-    e_pair.key = epid_t(in_v, out_v, 0);
-    Tool::str2int(to_string(label), e_pair.value);
-    // push to property_list of v
-    ep->plist.push_back(e_pair);
+    edges_label[eid.value()] = label;
+
     pch = strtok(NULL, "");
     string s(pch);
-    vector<label_t> pkeys;
 
     vector<string> kvpairs;
     Tool::splitWithEscape(s, "[],:", kvpairs);
@@ -609,140 +526,6 @@ void DataStore::to_ep(char* line, vector<EProperty*> & eplist) {
         e_pair.value = p.value;
 
         ep->plist.push_back(e_pair);
-        pkeys.push_back((label_t)p.key);
     }
-
-    sort(pkeys.begin(), pkeys.end());
-
-    //=================Insert ep list
-    int num_ep = pkeys.size();
-    int ep_ext_num = num_ep - EP_NBS;
-    uint64_t ep_ext_offset = 0;
-    label_t * m_ep_ext = nullptr;
-
-    if(ep_ext_num > 0) {
-        ep_ext_offset = e_table_->sync_alloc_ext(sizeof(label_t)*ep_ext_num);
-        e->ext_ep_ptr = ptr_t(sizeof(label_t)*ep_ext_num, ep_ext_offset);
-        m_ep_ext = (label_t *)(e_table_->get_ext() + ep_ext_offset);
-    }
-
-    for(int i = 0; i < num_ep; ++i) {
-        if(i < EP_NBS)
-            e->ep_list[i] = pkeys[i];
-        else    
-            m_ep_ext[i - EP_NBS] = pkeys[i];
-    }
-
-    edges.push_back(e);
     eplist.push_back(ep);
 }
-
-#ifdef TEST_WITH_COUNT
-// test with counter functions
-void DataStore::InitCounter() {
-    vtx_counter_ = 0;
-    vtx_sizes_.clear();
-    edg_counter_ = 0;
-    edg_sizes_.clear();
-    vp_counter_ = 0;
-    vp_sizes_.clear();
-    ep_counter_ = 0;
-    ep_sizes_.clear();
-    vin_nbs_counter_ = 0;
-    vin_nbs_sizes_.clear();
-    vout_nbs_counter_ = 0;
-    vout_nbs_sizes_.clear();
-}
-void DataStore::RecordVtx(int size) {
-    vtx_counter_ += 1;
-    vtx_sizes_.push_back(size);
-}
-void DataStore::RecordEdg(int size) {
-    edg_counter_ += 1;
-    edg_sizes_.push_back(size);
-}
-void DataStore::RecordVp(int size) {
-    vp_counter_ += 1;
-    vp_sizes_.push_back(size);
-}
-void DataStore::RecordEp(int size) {
-    ep_counter_ += 1;
-    ep_sizes_.push_back(size);
-}
-void DataStore::RecordVin(int size) {
-    vin_nbs_counter_ += 1;
-    vin_nbs_sizes_.push_back(size);
-}
-void DataStore::RecordVout(int size) {
-    vout_nbs_counter_ += 1;
-    vout_nbs_sizes_.push_back(size);
-}
-void DataStore::PrintCounter() {
-    if(vtx_counter_ || edg_counter_ || vin_nbs_counter_ || vout_nbs_counter_ || vp_counter_ || ep_counter_ )
-        std::cout << "============================================" << std::endl;
-
-    if(vtx_counter_) {
-        std::cout << "Visit vertex table " << vtx_counter_ << std::endl;
-        long total = 0;
-        for(auto it = vtx_sizes_.begin(); it != vtx_sizes_.end(); ++it) {
-            total += *it;
-            // std::cout << *it << " ";
-        }
-        std::cout << "Visit vertex size " << total << std::endl;
-    }
-    
-    if(edg_counter_) {
-        std::cout << "Visit edge table " << edg_counter_ << std::endl;
-        long total = 0;
-        for(auto it = edg_sizes_.begin(); it != edg_sizes_.end(); ++it) {
-            total += *it;
-            // std::cout << *it << " ";
-        }
-        std::cout << "Visit edge size " << total << std::endl;
-    }
-
-    if(vin_nbs_counter_) {
-        std::cout << "Visit vin nbs " << vin_nbs_counter_ << std::endl;
-        long total = 0;
-        for(auto it = vin_nbs_sizes_.begin(); it != vin_nbs_sizes_.end(); ++it) {
-            total += *it;
-            // std::cout << *it << " ";
-        }
-        std::cout << "Visit vin nbs size " << total << std::endl;
-    }
-
-    if(vout_nbs_counter_) {
-        std::cout << "Visit vout nbs " << vout_nbs_counter_ << std::endl;
-        long total = 0;
-        for(auto it = vout_nbs_sizes_.begin(); it != vout_nbs_sizes_.end(); ++it) {
-            total += *it;
-            // std::cout << *it << " ";
-        }
-        std::cout << "Visit vout nbs size " << total << std::endl;       
-    }
-
-    if(vp_counter_) {
-        std::cout << "Visit vp table " << vp_counter_ << std::endl;
-        long total = 0;
-        for(auto it = vp_sizes_.begin(); it != vp_sizes_.end(); ++it) {
-            total += *it;
-            // std::cout << *it << " ";
-        }
-        std::cout << "Visit vp size " << total << std::endl;
-        // std::cout << std::endl;
-    }
-
-    if(ep_counter_) {
-        std::cout << "Visit ep table " << ep_counter_ << std::endl;
-        long total = 0;
-        for(auto it = ep_sizes_.begin(); it != ep_sizes_.end(); ++it) {
-            total += *it;
-            // std::cout << *it << " ";
-        }
-        std::cout << "Visit ep size " << total << std::endl;
-        // std::cout << std::endl;
-    }
-    if(vtx_counter_ || edg_counter_ || vin_nbs_counter_ || vout_nbs_counter_ || vp_counter_ || ep_counter_ )
-        std::cout << "============================================" << std::endl << std::endl;
-}
-#endif

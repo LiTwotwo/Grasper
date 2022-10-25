@@ -106,7 +106,7 @@ class Node {
     }
 
     void LocalSingleDebugPrint(string s) {
-        printf("node single dbg from local_rank_ %d, str = \"%s\"", s.c_str());
+        printf("node single dbg from local_rank_ %d, str = \"%s\"", StaticInstance().local_rank_, s.c_str());
     }
 
     double WtimeSinceStart() {

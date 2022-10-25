@@ -108,7 +108,6 @@ class ExpertAdapter {
     void execute(int tid, Message & msg) {
         Meta & m = msg.meta;
         if (m.msg_type == MSG_T::INIT) {
-            std::cout << "Here in INIT" << std::endl;
             // acquire write lock for insert
             accessor ac;
             msg_logic_table_.insert(ac, m.qid);
@@ -152,15 +151,28 @@ class ExpertAdapter {
         do {
             current_step = msg.meta.step;
             EXPERT_T next_expert = ac->second[current_step].expert_type;
-            int offset = (experts_[next_expert]->GetExpertId() + timer_offset) * num_thread_;
 
-            timer::start_timer(tid + offset);
-            metadata_->InitCounter();
+            #ifdef TEST_WITH_COUNT
+                uint64_t start_t = timer::get_usec();
+                metadata_->InitCounter();
+            #endif
+
             experts_[next_expert]->process(ac->second, msg);
-            timer::stop_timer(tid + offset);
-            if(strcmp(ExpertType[int(next_expert)], "END") != 0)
-                std::cout << "Expert is " << ExpertType[int(next_expert)] << " which consume " << timer::get_timer(tid + offset) * 1000 << "us"<< endl;
-            metadata_->PrintCounter();
+
+            #ifdef TEST_WITH_COUNT
+                uint64_t end_t = timer::get_usec();
+                if(strcmp(ExpertType[int(next_expert)], "END") != 0) 
+                    std::cout << "Expert is " << ExpertType[int(next_expert)] << " which consume " << (end_t-start_t)/1000  << "us"<< std::endl;
+                if(strcmp(ExpertType[int(next_expert)], "TRAVERSAL") == 0) {
+                    metadata_->GetTraselTime((end_t-start_t));
+                }
+                if(strcmp(ExpertType[int(next_expert)], "HAS") == 0) {
+                    metadata_->GetHasTime((end_t-start_t));
+                }
+                metadata_->AggTime(end_t-start_t);                
+                metadata_->PrintCounter();       
+            #endif    
+            
         } while (current_step != msg.meta.step);    // process next expert directly if step is modified
     }
 

@@ -93,7 +93,6 @@ class RdmaCtrl::RdmaCtrlImpl {
     int rc;  // return code
 
     dev_list = ibv_get_device_list(&num_devices);
-    RDMA_LOG(INFO) << "device num = " << num_devices;
 
     if (idx.dev_id >= num_devices || idx.dev_id < 0) {
       RDMA_LOG(WARNING) << "wrong dev_id: " << idx.dev_id << "; total " << num_devices << " found";
@@ -118,7 +117,6 @@ class RdmaCtrl::RdmaCtrlImpl {
     // fill the lid
     ibv_port_attr port_attr;
     rc = ibv_query_port(ib_ctx, idx.port_id, &port_attr);
-    RDMA_LOG(INFO) << "port status = " << port_attr.state;
     if (rc < 0) {
       RDMA_LOG(WARNING) << "failed to query port status w error: " << strerror(errno);
       RDMA_VERIFY(INFO, ibv_close_device(ib_ctx) == 0) << "failed to close device " << idx.dev_id;

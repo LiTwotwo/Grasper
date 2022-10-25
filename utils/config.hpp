@@ -59,7 +59,6 @@ class Config {
     int global_num_threads;
 
     int global_vertex_sz_gb;
-    int global_edge_sz_gb;
     int global_vertex_property_kv_sz_gb;
     int global_edge_property_kv_sz_gb;
 
@@ -87,10 +86,7 @@ class Config {
     uint64_t vertex_sz;
     uint64_t vertex_offset;
 
-    uint64_t edge_sz;
-    uint64_t edge_offset;
-
-    // kvstore = vertex_property_kv_sz + edge_property_kv_sz
+    // kvstore = vertex_property_kv_sz
     uint64_t kvstore_sz;
     uint64_t kvstore_offset;
 
@@ -115,7 +111,7 @@ class Config {
     // remote_head_buffer_offset = local_head_buffer_sz * local_head_buffer_offset
     uint64_t remote_head_buffer_offset;
 
-    // remote_buffer_sz = vertex_sz + edge_sz + kvstore_sz
+    // remote_buffer_sz = vertex_sz + kvstore_sz
     uint64_t remote_buffer_sz;
 
     // local_buffer_sz = send_buffer_sz + recv_buffer_sz + local_head_buffer_sz + remote_head_buffer_sz
@@ -127,7 +123,6 @@ class Config {
     // ================================================================
     // settle down after data loading
     char * vtx_store;
-    char * edge_store;
     char * kvstore;
     char * send_buf;
     char * recv_buf;
@@ -135,7 +130,6 @@ class Config {
     char * remote_head_buf;
 
     uint32_t num_vertex_node;
-    uint32_t num_edge_node;
     uint32_t num_vertex_property;
     uint32_t num_edge_property;
 
@@ -248,14 +242,6 @@ class Config {
             global_vertex_sz_gb = val;
         } else {
             fprintf(stderr, "must enter the VTX_SZ_GB. exits\n");
-            exit(-1);
-        }
-
-        val = iniparser_getint(ini, "SYSTEM:EDGE_SZ_GB", val_not_found);
-        if(val != val_not_found) {
-            global_edge_sz_gb = val;
-        } else {
-            fprintf(stderr, "must enter the EDGE_SZ_GB. exits\n");
             exit(-1);
         }
 
@@ -393,13 +379,10 @@ class Config {
         vertex_sz = GiB2B(global_vertex_sz_gb);
         vertex_offset = 0;
 
-        edge_sz = GiB2B(global_edge_sz_gb);
-        edge_offset = vertex_sz + vertex_offset;
-
         kvstore_sz = GiB2B(global_vertex_property_kv_sz_gb) + GiB2B(global_edge_property_kv_sz_gb);
-        kvstore_offset = edge_offset + edge_sz;
+        kvstore_offset = vertex_sz + vertex_offset;
 
-        remote_buffer_sz = vertex_sz + edge_sz + kvstore_sz;
+        remote_buffer_sz = vertex_sz + kvstore_sz;
             
         // remote init hdfs
         hdfs_init(HDFS_HOST_ADDRESS, HDFS_PORT);
@@ -437,7 +420,6 @@ class Config {
         ss << "SNAPSHOT_PATH : " << SNAPSHOT_PATH << endl;
 
         ss << "global_vertex_sz_gb : " << global_vertex_sz_gb << endl;
-        ss << "global_edge_sz_gb : " <<  global_edge_sz_gb << endl;
         ss << "global_vertex_property_kv_sz_gb : " << global_vertex_property_kv_sz_gb << endl;
         ss << "global_edge_property_kv_sz_gb : " << global_edge_property_kv_sz_gb << endl;        
 

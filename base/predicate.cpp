@@ -146,6 +146,7 @@ bool Evaluate(PredicateValue & pv, const value_t *value) {
         }
         return true;
     }
+    return false;
 }
 
 bool Evaluate(Predicate_T pred_type, value_t & val1, value_t & val2) {

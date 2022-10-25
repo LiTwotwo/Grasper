@@ -356,8 +356,8 @@ class Tool {
         case 1:
             i = Tool::value_t2int(v);
             return to_string(i);
-        case -1:
-            return "";
+        // case -1:
+        //     return "";
         default:
             value_t2vec(v, vec);
             temp = "[";

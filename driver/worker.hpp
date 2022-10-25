@@ -49,6 +49,7 @@ class Worker {
 
         buf_ = NULL;
         mailbox_ = NULL;
+        core_affinity_ = NULL;
         metadata_ = NULL;
     }
 
@@ -67,6 +68,7 @@ class Worker {
 
         delete buf_;
         delete mailbox_;
+        delete core_affinity_;
         delete metadata_;
     }
 
@@ -371,8 +373,8 @@ class Worker {
         NaiveIdMapper id_mapper(my_node_);
 
         // init core affinity
-        CoreAffinity core_affinity;
-        core_affinity.Init();
+        core_affinity_ = new CoreAffinity();
+        core_affinity_->Init();
         cout << "Worker" << my_node_.get_local_rank() << ": DONE -> Init Core Affinity" << endl;
 
         // set the in-memory layout for RDMA buf
@@ -410,7 +412,6 @@ class Worker {
         remote_listener_->recv(&metamsg);
         m.assign((char *)metamsg.data(), meta_size, 0);
         m >> graphmeta;
-        cout << graphmeta.DebugString();
 
         metadata_ = new MetaData(my_node_, &id_mapper, buf_);
         MetaData::StaticInstanceP(metadata_);
@@ -422,21 +423,24 @@ class Worker {
         parser_->LoadMapping(metadata_);
         cout << "Worker" << my_node_.get_local_rank()  << ": DONE -> Parser_->LoadMapping()" << endl;
 
+        metadata_->get_schema();
+        worker_barrier(my_node_);
+
+        cout << "Worker" << my_node_.get_local_rank() << ": DONE -> Get String index()" << endl;
+
         // // write snapshot area
         // datastore->WriteSnapshot();
 
         thread recvreq(&Worker::RecvRequest, this);
-        thread sendmsg(&Worker::SendQueryMsg, this, mailbox_, &core_affinity);
-        // thread sendmsg(&Worker::SendQueryMsg, this, mailbox_, core_affinity);
+        // thread sendmsg(&Worker::SendQueryMsg, this, mailbox_, &core_affinity);
+        thread sendmsg(&Worker::SendQueryMsg, this, mailbox_, core_affinity_);
 
         Monitor monitor(my_node_);
         monitor.Start();
         worker_barrier(my_node_);
 
         // expert driver starts
-        // ExpertAdapter * expert_adapter = new ExpertAdapter(my_node_, rc_, mailbox_, metadata_, &core_affinity, index_store_);
-        ExpertAdapter expert_adapter(my_node_, rc_, mailbox_, metadata_, &core_affinity, index_store_);
-        // ExpertAdapter expert_adapter(my_node_, rc_, mailbox_, metadata_, core_affinity, index_store_);
+        ExpertAdapter expert_adapter(my_node_, rc_, mailbox_, metadata_, core_affinity_, index_store_);
         expert_adapter.Start();
         cout << "Worker" << my_node_.get_local_rank() << ": DONE -> expert_adapter->Start()" << endl;
         worker_barrier(my_node_);
@@ -470,6 +474,7 @@ class Worker {
                 sprintf(addr, "tcp://%s:%d", re.hostname.c_str(), workers_[my_node_.get_local_rank()].tcp_port + my_node_.get_world_rank() + 1);
                 sender.connect(addr);
                 cout << "worker_node" << my_node_.get_local_rank() << " sends the results to Client " << re.hostname << endl;
+                metadata_->PrintTimeRatio();
                 sender.send(msg);
 
                 // monitor.IncreaseCounter(1);
@@ -498,6 +503,7 @@ class Worker {
     uint32_t num_query;
 
     Buffer* buf_;
+    CoreAffinity * core_affinity_;
     AbstractMailbox * mailbox_;
     MetaData * metadata_;
 

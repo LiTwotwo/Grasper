@@ -83,11 +83,7 @@ class PropertiesExpert : public AbstractExpert {
                 Vertex vtx;
                 metadata_->GetVertex(tid, v_id, vtx);
                 vector<label_t> vp_list;
-                int sz = metadata_->GetVPList(tid, vtx, vp_list);
-
-                #ifdef TEST_WITH_COUNT
-                        metadata_->RecordVtx(sz*sizeof(label_t));
-                #endif
+                metadata_->GetVPList(vtx.label, vp_list);
 
                 if (key_list.empty()) {
                     for (auto & pkey : vp_list) {
@@ -148,14 +144,10 @@ class PropertiesExpert : public AbstractExpert {
             for (auto & value : pair.second) {
                 eid_t e_id;
                 uint2eid_t(Tool::value_t2uint64_t(value), e_id);
-                Edge edge;
-                metadata_->GetEdge(tid, e_id, edge);
+                label_t label;
+                metadata_->GetLabelForEdge(tid, e_id, label);
                 vector<label_t> ep_list;
-                int sz = metadata_->GetEPList(tid, edge, ep_list);
-
-                #ifdef TEST_WITH_COUNT
-                    metadata_->RecordEdg(sz*sizeof(label_t));
-                #endif
+                metadata_->GetEPList(label, ep_list);
 
                 if (key_list.empty()) {
                     for (auto & pkey : ep_list) {

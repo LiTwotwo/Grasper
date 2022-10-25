@@ -30,7 +30,7 @@ int main(int argc, char* argv[]) {
     my_node.tcp_port = node.tcp_port;
     my_node.rdma_port = node.rdma_port;
     my_node.hostname = node.hostname;
-    cout << my_node.DebugString();
+    std::cout << my_node.DebugString();
     nodes.erase(nodes.begin());  // delete the master info in nodes (array) for rdma init
     Node remote = nodes.back();
     nodes.pop_back();
@@ -44,7 +44,7 @@ int main(int argc, char* argv[]) {
     Config* config = Config::GetInstance();
     config->Init();
 
-    cout  << "DONE -> Local Config->Init()" << endl;
+    std::cout  << "DONE -> Local Config->Init()" << endl;
 
     if (my_node.get_world_rank() == MASTER_RANK) {
         Master master(my_node);

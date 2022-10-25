@@ -15,40 +15,32 @@ Authors: Hongzhi Chen (hzchen@cse.cuhk.edu.hk)
 
 #define IN_NBS 3
 #define OUT_NBS 3
-#define VP_NBS 6
 #define EP_NBS 1
-#define META_SIZE 96
 
 using namespace std;
 
+struct Nbs_pair {
+    vid_t vid;
+    label_t label;
+};
+
+ibinstream& operator<<(ibinstream& m, const Nbs_pair& pair);
+
+obinstream& operator>>(obinstream& m, Nbs_pair& pair);
+
 struct Vertex {
     vid_t id;
-    // label_t label;
-    vid_t in_nbs[IN_NBS];
+    label_t label;
+    Nbs_pair in_nbs[IN_NBS];
     ptr_t ext_in_nbs_ptr;
-    vid_t out_nbs[OUT_NBS] ;
+    Nbs_pair out_nbs[OUT_NBS] ;
     ptr_t ext_out_nbs_ptr;
-    label_t vp_list[VP_NBS] ;
-    ptr_t ext_vp_ptr;
     // string DebugString() const;
 };
 
 ibinstream& operator<<(ibinstream& m, const Vertex& v);
 
 obinstream& operator>>(obinstream& m, Vertex& v);
-
-struct Edge {
-    // vid_t v_1;
-    // vid_t v_2;
-    eid_t id;
-    label_t ep_list[EP_NBS];
-    ptr_t ext_ep_ptr;
-    string DebugString() const;
-};
-
-ibinstream& operator<<(ibinstream& m, const Edge& e);
-
-obinstream& operator>>(obinstream& m, Edge& e);
 
 struct V_KVpair {
     vpid_t key;
@@ -98,11 +90,6 @@ struct GraphMeta {
     uint64_t v_ext_off;
     uint64_t v_num;
 
-    // edge
-    uint64_t e_array_off;
-    uint64_t e_ext_off;
-    uint64_t e_num;
-
     // vp
     uint64_t vp_off;
     uint64_t vp_num_slots;
@@ -116,9 +103,6 @@ struct GraphMeta {
     GraphMeta(uint64_t v_array_off,
             uint64_t v_ext_off,
             uint64_t v_num,
-            uint64_t e_array_off,
-            uint64_t e_ext_off,
-            uint64_t e_num,
             uint64_t vp_off,
             uint64_t vp_num_slots,
             uint64_t vp_num_buckets,
@@ -128,9 +112,6 @@ struct GraphMeta {
             v_array_off(v_array_off),
             v_ext_off(v_ext_off),
             v_num(v_num),
-            e_array_off(e_array_off),
-            e_ext_off(e_ext_off),
-            e_num(e_num),
             vp_off(vp_off),
             vp_num_slots(vp_num_slots),
             vp_num_buckets(vp_num_buckets),

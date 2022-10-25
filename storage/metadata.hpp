@@ -8,6 +8,7 @@
 
 #pragma once
 #define TEST_WITH_COUNT
+// #define DEBUG
 
 #include <mutex>
 #include <string>
@@ -41,8 +42,6 @@ class MetaData {
 
     ~MetaData();
 
-    void GetRemoteMeta(vector<Node> & remotes);
-
     void Init(vector<Node> & nodes, GraphMeta& graphmeta);
 
     // index format
@@ -58,25 +57,33 @@ class MetaData {
      *    unordered_map<label_t, string> vpk2str;
      */
 
+    // access remote
     void GetVertex(int tid, vid_t v_id, Vertex& v);
-    int GetVPList(int tid, Vertex& v, vector<label_t>& vpl);
-    int GetInNbs(int tid, Vertex& v, vector<vid_t>& in_nbs);
-    int GetOutNbs(int tid, Vertex& v, vector<vid_t>& out_nbs);
-
-    void GetEdge(int tid, eid_t e_id, Edge & e);
-    int GetEPList(int tid, Edge& e, vector<label_t>& epl);
 
     void GetAllVertices(int tid, vector<vid_t> & vid_list);
     void GetAllEdges(int tid, vector<eid_t> & eid_list);
 
-    bool VPKeyIsLocal(vpid_t vp_id);
-    bool EPKeyIsLocal(epid_t ep_id);
-
     bool GetPropertyForVertex(int tid, vpid_t vp_id, value_t & val);
     bool GetPropertyForEdge(int tid, epid_t ep_id, value_t & val);
 
+    // partial access remote
+    int GetInNbs(int tid, Vertex& v, vector<Nbs_pair>& in_nbs);
+    int GetOutNbs(int tid, Vertex& v, vector<Nbs_pair>& out_nbs);
+
+    // Not directly access remote
+    label_t GetEdgeLabel(int tid, eid_t e_id);
     bool GetLabelForVertex(int tid, vid_t vid, label_t & label);
     bool GetLabelForEdge(int tid, eid_t eid, label_t & label);
+
+    // help function
+    bool VPKeyIsLocal(vpid_t vp_id);
+    bool EPKeyIsLocal(epid_t ep_id);
+
+    void get_string_indexes();
+    void get_schema();
+
+    void GetVPList(label_t label, vector<label_t>& vp_list);
+    void GetEPList(label_t label, vector<label_t>& ep_list);
 
     // LCY: currently not used, but will be used again if more than one remote servers are used
     int GetMachineIdForVertex(vid_t v_id);
@@ -87,12 +94,6 @@ class MetaData {
     void InsertAggData(agg_t key, vector<value_t> & data);
     void GetAggData(agg_t key, vector<value_t> & data);
     void DeleteAggData(agg_t key);
-
-    void get_string_indexes();
-
-    // // local access val for TCP request
-    // void AccessVProperty(uint64_t vp_id_v, value_t & val);
-    // void AccessEProperty(uint64_t ep_id_v, value_t & val);
 
     // single ptr instance
     // diff from Node
@@ -108,22 +109,21 @@ class MetaData {
         assert(static_instance_p_ != NULL);
         return static_instance_p_;
     }
- 
+
 #ifdef TEST_WITH_COUNT
-// test with counter functions
     void InitCounter();
-    void RecordVtx(int size);
-    void RecordEdg(int size);
-    void RecordVp(int size);
-    void RecordEp(int size);
-    void RecordVin(int size); 
-    void RecordVout(int size); 
-    void RecordVtxExt(int size);
     void PrintCounter();
+    void ResetTime();
+    void GetTraselTime(double time);
+    void GetHasTime(double time);
+    void AggTime(double time);
+    void PrintTimeRatio();
 #endif
 
     // load the index and data from HDFS
     string_index indexes;  // index is global, no need to shuffle
+    std::map<label_t, vector<label_t>> vtx_schemas;
+    std::map<label_t, vector<label_t>> edge_schemas;
 
  private:
     AbstractIdMapper* id_mapper_;
@@ -137,20 +137,22 @@ class MetaData {
     uint64_t v_ext_off_;
     uint64_t v_num_;
 
-    //edge
-    uint64_t e_array_off_;
-    uint64_t e_ext_off_;
-    uint64_t e_num_;
-
     unordered_map<agg_t, vector<value_t>> agg_data_table;
     mutex agg_mutex;
 
     VKVStore_Local * vpstore_;
     EKVStore_Local * epstore_;
     
-
-    // test counter
 #ifdef TEST_WITH_COUNT
+// test with counter functions
+    void RecordVtx(int size);
+    void RecordEdg(int size);
+    void RecordVp(int size);
+    void RecordEp(int size);
+    void RecordVin(int size); 
+    void RecordVout(int size); 
+    void RecordVtxExt(int size);
+
     int vtx_counter_;
     vector<int> vtx_sizes_;
     int vtx_ext_counter_;
@@ -165,6 +167,9 @@ class MetaData {
     vector<int> vin_nbs_sizes_;
     int vout_nbs_counter_;
     vector<int> vout_nbs_sizes_;
+    double total_time_;
+    double traversal_time_;
+    double has_time_;
 #endif
 
 };

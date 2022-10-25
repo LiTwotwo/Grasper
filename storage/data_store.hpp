@@ -4,7 +4,6 @@ Authors: Hongzhi Chen (hzchen@cse.cuhk.edu.hk)
 */
 
 #pragma once
-#define TEST_WITH_COUNT
 
 #include <mutex>
 #include <string>
@@ -22,7 +21,6 @@ Authors: Hongzhi Chen (hzchen@cse.cuhk.edu.hk)
 #include "storage/vkvstore.hpp"
 #include "storage/ekvstore.hpp"
 #include "storage/vertex.hpp"
-#include "storage/edge.hpp"
 #include "utils/hdfs_core.hpp"
 #include "utils/config.hpp"
 #include "utils/unit.hpp"
@@ -80,18 +78,6 @@ class DataStore {
         assert(static_instance_p_ != NULL);
         return static_instance_p_;
     }
- 
-// #ifdef TEST_WITH_COUNT
-// test with counter functions
-    void InitCounter();
-    void RecordVtx(int size);
-    void RecordEdg(int size);
-    void RecordVp(int size);
-    void RecordEp(int size);
-    void RecordVin(int size); 
-    void RecordVout(int size); 
-    void PrintCounter();
-// #endif
 
     // load the index and data from HDFS
     string_index indexes;  // index is global, no need to shuffle
@@ -104,7 +90,6 @@ class DataStore {
 
     //==================== Data Storage =======================
     VertexTable * v_table_;
-    EdgeTable* e_table_;
 
     unordered_map<agg_t, vector<value_t>> agg_data_table;
     mutex agg_mutex;
@@ -114,29 +99,15 @@ class DataStore {
 
     GraphMeta graph_meta_;    
 
-    // test counter
-#ifdef TEST_WITH_COUNT
-    int vtx_counter_;
-    vector<int> vtx_sizes_;
-    int edg_counter_;
-    vector<int> edg_sizes_;
-    int vp_counter_;
-    vector<int> vp_sizes_;
-    int ep_counter_;
-    vector<int> ep_sizes_;
-    int vin_nbs_counter_;
-    vector<int> vin_nbs_sizes_;
-    int vout_nbs_counter_;
-    vector<int> vout_nbs_sizes_;
-#endif
-
     // =========tmp usage=========
     // will not be used after data loading
     vector<Vertex*> vertices;
-    vector<Edge*> edges;
     vector<VProperty*> vplist;
     vector<EProperty*> eplist;
     vector<vp_list*> vp_buf;
+
+    std::map<uint32_t, label_t> vtx_label;
+    std::map<uint64_t, label_t> edges_label;
 
     // ==========tmp usage=========
     void get_string_indexes();

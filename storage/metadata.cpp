@@ -23,20 +23,12 @@ MetaData::~MetaData() {
     delete epstore_;
 }
 
-void MetaData::GetRemoteMeta(vector<Node> & remotes) {
-    
-}
-
 void MetaData::Init(vector<Node> & nodes, GraphMeta& graphmeta) {
     // TODO(big) init vkv ekv vtable etable in remote and local 
     // TODO(big) get v/e meta from remote
     v_array_off_ = graphmeta.v_array_off;
     v_ext_off_ = graphmeta.v_ext_off;
     v_num_ = graphmeta.v_num;
-
-    e_array_off_ = graphmeta.e_array_off;
-    e_ext_off_ = graphmeta.e_ext_off;
-    e_num_ = graphmeta.e_num;
     
     vpstore_ = new VKVStore_Local(buffer_);
     epstore_ = new EKVStore_Local(buffer_);
@@ -75,38 +67,10 @@ void MetaData::GetVertex(int tid, vid_t v_id, Vertex& v) {
     return;
 }
 
-int MetaData::GetVPList(int tid, Vertex& v, vector<label_t>& vpl) {
-    int size;
-    for(size = 0; size < VP_NBS; ++size) {
-        if(v.vp_list[size] == 0)
-            break;
-        vpl.push_back(v.vp_list[size]);
-    }
-    if(v.ext_vp_ptr.size != 0) {
-        // has ext property
-        char * send_buf = buffer_->GetSendBuf(tid);
-        uint64_t off = v_ext_off_ + v.ext_vp_ptr.off;
-        uint64_t sz = v.ext_vp_ptr.size;
-        
-        RDMA &rdma = RDMA::get_rdma();
-        rdma.dev->RdmaRead(tid, REMOTE_NID, send_buf, sz, off);
-        
-        int num = sz/sizeof(label_t);
-        label_t * recv = (label_t*)send_buf;
-        for(int i = 0; i<num; ++i) {
-            vpl.push_back(recv[i]);
-            size++;
-        }
-        #ifdef TEST_WITH_COUNT
-        #endif
-    }
-    return size;
-};
-
-int MetaData::GetInNbs(int tid, Vertex& v, vector<vid_t>& in_nbs) {
+int MetaData::GetInNbs(int tid, Vertex& v, vector<Nbs_pair>& in_nbs) {
     int size;
     for(size = 0; size < IN_NBS; ++size) {
-        if(v.in_nbs[size] == 0) 
+        if(v.in_nbs[size].vid == 0) 
             break; // TODO(big): check that no vid is 0
         in_nbs.push_back(v.in_nbs[size]);
     }
@@ -119,20 +83,31 @@ int MetaData::GetInNbs(int tid, Vertex& v, vector<vid_t>& in_nbs) {
         RDMA &rdma = RDMA::get_rdma();
         rdma.dev->RdmaRead(tid, REMOTE_NID, send_buf, sz, off);
         
-        int num = sz/sizeof(vid_t);
-        vid_t * recv = (vid_t*)send_buf;
+        int num = sz/sizeof(Nbs_pair);
+        Nbs_pair* recv = (Nbs_pair*)send_buf;
         for(int i = 0; i<num; ++i) {
             in_nbs.push_back(recv[i]);
             size++;
         }
+
+        #ifdef TEST_WITH_COUNT
+            RecordVin(num*sizeof(Nbs_pair));
+        #endif
     }
+#ifdef DEBUG
+    std::cout << "In Nbs = ";
+    for(auto it = in_nbs.begin(); it != in_nbs.end(); ++it) {
+         std::cout << "(" << it->vid.value() << "," << it->label << ") ";
+    }
+    std::cout << std::endl;
+#endif
     return size;
 };
 
-int MetaData::GetOutNbs(int tid, Vertex& v, vector<vid_t>& out_nbs) {
+int MetaData::GetOutNbs(int tid, Vertex& v, vector<Nbs_pair>& out_nbs) {
     int size;
     for(size = 0; size < OUT_NBS; ++size) {
-        if(v.out_nbs[size] == 0) 
+        if(v.out_nbs[size].vid == 0) 
             break; // TODO(big): check that no vid is 0
         out_nbs.push_back(v.out_nbs[size]);
     }
@@ -145,49 +120,45 @@ int MetaData::GetOutNbs(int tid, Vertex& v, vector<vid_t>& out_nbs) {
         RDMA &rdma = RDMA::get_rdma();
         rdma.dev->RdmaRead(tid, REMOTE_NID, send_buf, sz, off);
         
-        int num = sz/sizeof(vid_t);
-        vid_t * recv = (vid_t*)send_buf;
+        int num = sz/sizeof(Nbs_pair);
+        Nbs_pair * recv = (Nbs_pair*)send_buf;
         for(int i = 0; i<num; ++i) {
             out_nbs.push_back(recv[i]);
             size++;
         }
+
+        #ifdef TEST_WITH_COUNT
+            RecordVout(num*sizeof(Nbs_pair));
+        #endif
     }
+#ifdef DEBUG
+    std::cout << "Out Nbs = ";
+    for(auto it = out_nbs.begin(); it != out_nbs.end(); ++it) {
+         std::cout << "(" << it->vid.value() << "," << it->label << ") ";
+    }
+    std::cout << std::endl;
+#endif
     return size;
 };
 
-void MetaData::GetEdge(int tid, eid_t e_id, Edge& e) {
-    char * send_buf = buffer_->GetSendBuf(tid);
-    uint64_t e_off = e_array_off_ + e_id.tmp_hash(e_num_) * sizeof(Edge); // LCY: tmp usage, not correct
-
-    RDMA &rdma = RDMA::get_rdma();
-    rdma.dev->RdmaRead(tid, REMOTE_NID, send_buf, sizeof(Edge), e_off);
-    memcpy(&e, send_buf, sizeof(Edge));
-
-    #ifdef TEST_WITH_COUNT
-        RecordEdg(sizeof(Edge));
-    #endif
-    return;
-}
-
-int MetaData::GetEPList(int tid, Edge& e, vector<label_t>& epl) {
-    int size;
-    for(size = 0; size < EP_NBS; ++size) {
-        if(e.ep_list[size] == 0)    
-            break;
-        epl.push_back(e.ep_list[size]);
+label_t MetaData::GetEdgeLabel(int tid, eid_t e_id) {
+    Vertex src;
+    GetVertex(tid, e_id.in_v, src);
+    vector<Nbs_pair> out_nbs;
+    int sz = GetOutNbs(tid, src, out_nbs);
+    for(int i = 0; i < sz; ++i) {
+        if(out_nbs[i].vid == e_id.out_v) {
+            return out_nbs[i].label;
+        }
     }
-    assert(e.ext_ep_ptr.size == 0);
-    return size;    
+    return 0;
 }
 
 void MetaData::GetAllVertices(int tid, vector<vid_t> & vid_list) {
-    // TODO(big) get vertex from remote
-
     uint64_t buf_size = buffer_->GetSendBufSize();
     int per_read_num = buf_size/sizeof(Vertex);
     int count = 0;
     int remain = v_num_;
-    RDMA_LOG(INFO) << "In get all vtx remain = " << remain << " per read num = " << per_read_num << " v_array_off = " << v_array_off_;
     while(remain > 0) {
         int read_sz = remain > per_read_num ? per_read_num : remain;
         
@@ -213,24 +184,27 @@ void MetaData::GetAllVertices(int tid, vector<vid_t> & vid_list) {
 }
 
 void MetaData::GetAllEdges(int tid, vector<eid_t> & eid_list) {
-    // TODO(big) get all edge from remote
     uint64_t buf_size = buffer_->GetSendBufSize();
-    int per_read_num = buf_size/sizeof(Edge);
+    int per_read_num = buf_size/sizeof(Vertex);
     int count = 0;
-    int remain = e_num_;
+    int remain = v_num_;
     while(remain > 0) {
         int read_sz = remain > per_read_num ? per_read_num : remain;
         
         char* send_buf = buffer_->GetSendBuf(tid);
-        uint64_t off = e_array_off_ + count * sizeof(Edge);
-        uint64_t size = read_sz * sizeof(Edge);
+        uint64_t off = v_array_off_ + count * sizeof(Vertex);
+        uint64_t size = read_sz * sizeof(Vertex);
 
         RDMA &rdma = RDMA::get_rdma();
         rdma.dev->RdmaRead(tid, REMOTE_NID, send_buf, size, off);
-        Edge* e = (Edge *)send_buf;
+        Vertex* v = (Vertex *)send_buf;
 
         for(int i = 0; i < read_sz; ++i) {
-            eid_list.push_back(e[i].id);
+            vector<Nbs_pair> out_nbs;
+            int nbs_sz = GetOutNbs(tid, v[i], out_nbs);
+            for(int j = 0; j < nbs_sz; ++j) {
+                eid_list.push_back(eid_t(v[i].id.value(), out_nbs[j].vid.value()));                
+            }
         }
 
         count += read_sz;
@@ -238,27 +212,15 @@ void MetaData::GetAllEdges(int tid, vector<eid_t> & eid_list) {
     }
 
     #ifdef TEST_WITH_COUNT
-        RecordVtx(sizeof(Edge)*e_num_);
+        RecordVtx(sizeof(Vertex)*v_num_);
     #endif
 }
 
 bool MetaData::VPKeyIsLocal(vpid_t vp_id) {
-    // TODO(big) delete now all vp key is remote
-    // if (id_mapper_->IsVPropertyLocal(vp_id)) {
-    //     return true;
-    // } else {
-    //     return false;
-    // }
     return false;
 }
 
 bool MetaData::EPKeyIsLocal(epid_t ep_id) {
-    // TODO(big) delete now all epkey is remote
-    // if (id_mapper_->IsEPropertyLocal(ep_id)) {
-    //     return true;
-    // } else {
-    //     return false;
-    // }
     return false;
 }
 
@@ -274,12 +236,6 @@ bool MetaData::GetPropertyForVertex(int tid, vpid_t vp_id, value_t & val) {
 }
 
 bool MetaData::GetPropertyForEdge(int tid, epid_t ep_id, value_t & val) {
-    // TODO(big) get all property from remote
-    // if (id_mapper_->IsEPropertyLocal(ep_id)) {      // locally
-    //     epstore_->get_property_local(ep_id.value(), val);
-    // } else {                                        // remotely
-    //     epstore_->get_property_remote(tid, id_mapper_->GetMachineIdForEProperty(ep_id), ep_id.value(), val);
-    // }
     epstore_->get_property_remote(tid, id_mapper_->GetMachineIdForEProperty(ep_id), ep_id.value(), val);
 
 
@@ -292,35 +248,26 @@ bool MetaData::GetPropertyForEdge(int tid, epid_t ep_id, value_t & val) {
 }
 
 bool MetaData::GetLabelForVertex(int tid, vid_t vid, label_t & label) {
-    // TODO(big) get all label from 
-    label = 0;
-    vpid_t vp_id(vid, 0);
-    // if (id_mapper_->IsVPropertyLocal(vp_id)) {      // locally
-        // vpstore_->get_label_local(vp_id.value(), label);
-    // } else {                                        // remotely
-        vpstore_->get_label_remote(tid, id_mapper_->GetMachineIdForVProperty(vp_id), vp_id.value(), label);
-    // }
-    #ifdef TEST_WITH_COUNT 
-        RecordVp(sizeof(label_t));
-    #endif
-    return label;
+    // get label from struct vertex now
+    Vertex v;
+    GetVertex(tid, vid, v);
+    label = v.label;
+    return true;
 }
 
 bool MetaData::GetLabelForEdge(int tid, eid_t eid, label_t & label) {
     // TODO(big) get all edge label from remote
-    label = 0;
-    epid_t ep_id(eid, 0);
-    // if (id_mapper_->IsEPropertyLocal(ep_id)) {      // locally
-    //     epstore_->get_label_local(ep_id.value(), label);
-    // } else {                                        // remotely
-    //     epstore_->get_label_remote(tid, id_mapper_->GetMachineIdForEProperty(ep_id), ep_id.value(), label);
-    // }
-    epstore_->get_label_remote(tid, id_mapper_->GetMachineIdForEProperty(ep_id), ep_id.value(), label);
-
-     #ifdef TEST_WITH_COUNT
-        RecordEp(sizeof(label_t));
-    #endif
-    return label;
+    Vertex v;
+    GetVertex(tid, eid.in_v, v);
+    vector<Nbs_pair> out_nbs;
+    int nbs_sz = GetOutNbs(tid, v, out_nbs);
+    for(int i = 0; i < nbs_sz; ++i) {
+        if(out_nbs[i].vid == eid.out_v) {
+            label = out_nbs[i].label;
+            break;
+        }
+    }
+    return true;
 }
 
 int MetaData::GetMachineIdForVertex(vid_t v_id) {
@@ -402,25 +349,9 @@ void MetaData::DeleteAggData(agg_t key) {
     }
 }
 
-// void MetaData::AccessVProperty(uint64_t vp_id_v, value_t & val) {
-//     // TODO(big) delete use when RDMA is disabled
-//     vpstore_->get_property_local(vp_id_v, val);
-//     #ifdef TEST_WITH_COUNT
-//         RecordVp(val.content.size());
-//     #endif
-// }
-
-// void MetaData::AccessEProperty(uint64_t ep_id_v, value_t & val) {
-//     // TODO(big) delete use when RDMA is disabled
-//     epstore_->get_property_local(ep_id_v, val);
-//     #ifdef TEST_WITH_COUNT
-//         RecordEp(val.content.size());
-//     #endif
-// }
-
 void MetaData::get_string_indexes() {
     // TODO(big) string index cached in local
-    const string INDEX_PATH = "./data/sf0.1/output/index/";
+    const string INDEX_PATH = "./data/sf0.1/index/";
     ifstream file;
     string string_line;
 
@@ -521,6 +452,92 @@ void MetaData::get_string_indexes() {
     file.close();
 }
 
+void MetaData::get_schema() {
+    const string INDEX_PATH = "./data/sf0.1/index/";
+    ifstream file;
+    string string_line;
+
+    string el_path = INDEX_PATH + "./vtx_schema";
+    file.open(el_path);
+    if(!file.is_open()) {
+        std::cout << "Error when open edge label index file" << std::endl;
+        return;
+    }
+    while(getline(file, string_line)) {
+        char *line = const_cast<char*>(string_line.c_str());
+        char * pch;
+        pch = strtok(line, " ");
+        string key(pch);
+        label_t label = indexes.str2vl[key];
+        vtx_schemas[label] = vector<label_t>{};
+
+        pch = strtok(NULL, " ");
+        int num = atoi(pch);
+
+        for(int i = 0; i < num; ++i) {
+            pch  = strtok(NULL, " ");
+            string property(pch);
+            vtx_schemas[label].push_back(indexes.str2vpk[property]);            
+        }
+    }
+    #ifdef DEBUG
+    for(auto it = vtx_schemas.begin(); it != vtx_schemas.end(); ++it) {
+        cout << "Lable id = " << it->first << " Property id = ";
+        vector<label_t>& schema = it->second;
+        for(auto i = schema.begin(); i != schema.end(); ++i) {
+            cout << *i << " "; 
+        }
+        cout << endl;
+    }
+    #endif // DEBUG
+
+    file.close();
+
+    el_path = INDEX_PATH + "./edge_schema";
+    file.open(el_path);
+    if(!file.is_open()) {
+        std::cout << "Error when open edge label index file" << std::endl;
+        return;
+    }
+    while(getline(file, string_line)) {
+        char *line = const_cast<char*>(string_line.c_str());
+        char * pch;
+        pch = strtok(line, " ");
+        string key(pch);
+        label_t label = indexes.str2el[key];
+        edge_schemas[label] = vector<label_t>{};
+        pch = strtok(NULL, " ");
+        int num = atoi(pch);
+
+        for(int i = 0; i < num; ++i) {
+            pch  = strtok(NULL, " ");
+            string property(pch);
+            edge_schemas[label].push_back(indexes.str2epk[property]);            
+        }
+    }
+    #ifdef DEBUG
+    for(auto it = edge_schemas.begin(); it != edge_schemas.end(); ++it) {
+        cout << "Lable id = " << it->first << " Property id = ";
+        vector<label_t>& schema = it->second;
+        for(auto i = schema.begin(); i != schema.end(); ++i) {
+            cout << *i << " "; 
+        }
+        cout << endl;
+    }
+    #endif // DEBUG
+    file.close();
+}
+
+void MetaData::GetVPList(label_t label, vector<label_t>& vp_list) {
+    vp_list.insert(vp_list.begin(), vtx_schemas[label].begin(), vtx_schemas[label].end());
+    return;
+}
+
+void MetaData::GetEPList(label_t label, vector<label_t>& ep_list) {
+    ep_list.insert(ep_list.begin(), edge_schemas[label].begin(), edge_schemas[label].end());
+    return;
+}
+
 #ifdef TEST_WITH_COUNT
 // test with counter functions
 void MetaData::InitCounter() {
@@ -537,6 +554,36 @@ void MetaData::InitCounter() {
     vout_nbs_counter_ = 0;
     vout_nbs_sizes_.clear();
 }
+
+void MetaData::ResetTime() {
+    total_time_ = 0;
+    has_time_ = 0;
+    traversal_time_ = 0;
+    return;
+}
+
+void MetaData::AggTime(double time) {
+    total_time_ += time;
+    return;
+}
+
+void MetaData::GetTraselTime(double time) {
+    traversal_time_ += time;
+    return;
+}
+
+void MetaData::GetHasTime(double time) {
+    has_time_ += time;
+    return;
+}
+
+void MetaData::PrintTimeRatio() {
+    std::cout << "Has Ratio = " << has_time_/total_time_ << std::endl;
+    std::cout << "Traversal Ratio = " << traversal_time_/total_time_ << std::endl;
+    std::cout << "Total time = " << total_time_ << std::endl;
+    return;
+}
+
 void MetaData::RecordVtx(int size) {
     vtx_counter_ += 1;
     vtx_sizes_.push_back(size);

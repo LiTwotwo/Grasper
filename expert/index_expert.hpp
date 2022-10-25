@@ -96,7 +96,7 @@ class IndexExpert : public AbstractExpert {
             Vertex vtx;
             metadata_->GetVertex(tid, vid, vtx);
             vector<label_t> vp_list;
-            metadata_->GetVPList(tid, vtx, vp_list);
+            metadata_->GetVPList(vtx.label, vp_list);
 
 
             if (pid != 0 && find(vp_list.begin(), vp_list.end(), pid) == vp_list.end()) {
@@ -129,10 +129,10 @@ class IndexExpert : public AbstractExpert {
         for (auto& eid : eid_list) {
             value_t edge_v;
             Tool::str2uint64_t(to_string(eid.value()), edge_v);
-            Edge edge;
-            metadata_->GetEdge(tid, eid, edge);
+            label_t label;
+            metadata_->GetLabelForEdge(tid, eid, label);
             vector<label_t> ep_list;
-            metadata_->GetEPList(tid, edge, ep_list);
+            metadata_->GetEPList(label, ep_list);
             if (find(ep_list.begin(), ep_list.end(), pid) == ep_list.end()) {
                 no_key_vec.push_back(move(edge_v));
             } else {

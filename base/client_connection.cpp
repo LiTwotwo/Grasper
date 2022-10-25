@@ -30,7 +30,7 @@ void ClientConnection::Init(vector<Node> & nodes) {
         }
         char addr[64];
         sprintf(addr, "tcp://%s:%d", nodes[i].hostname.c_str(), nodes[i].tcp_port + 1);
-        cout << "Sender" << i << " connect addr: " << addr << endl;
+        std::cout << "Sender" << i << " connect addr: " << addr << std::endl;
         senders_[i]->connect(addr);
     }
 
@@ -39,7 +39,7 @@ void ClientConnection::Init(vector<Node> & nodes) {
         receivers_[i] = new zmq::socket_t(context_, ZMQ_PULL);
         char addr[64];
         sprintf(addr, "tcp://*:%d", nodes[i+1].tcp_port + i + 1 + 1);
-        cout << "Receiver" << i << " bind addr: " << addr << endl;
+        std::cout << "Receiver" << i << " bind addr: " << addr << std::endl;
         receivers_[i]->bind(addr);
     }
 }

@@ -76,7 +76,7 @@ class KeyExpert : public AbstractExpert {
                 Vertex vtx;
                 metadata_->GetVertex(tid, v_id, vtx);
                 vector<label_t> vp_list;
-                metadata_->GetVPList(tid, vtx, vp_list);
+                metadata_->GetVPList(vtx.label, vp_list);
                 for (auto & pkey : vp_list) {
                     string keyStr;
                     metadata_->GetNameFromIndex(Index_T::V_PROPERTY, pkey, keyStr);
@@ -97,10 +97,10 @@ class KeyExpert : public AbstractExpert {
                 eid_t e_id;
                 uint2eid_t(Tool::value_t2uint64_t(elem), e_id);
 
-                Edge edge;
-                metadata_->GetEdge(tid, e_id, edge);
+                label_t label;
+                metadata_->GetLabelForEdge(tid, e_id, label);
                 vector<label_t> ep_list;
-                metadata_->GetEPList(tid, edge, ep_list);
+                metadata_->GetEPList(label, ep_list);
 
                 for (auto & pkey : ep_list) {
                     string keyStr;

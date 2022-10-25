@@ -61,6 +61,9 @@ class InitExpert : public AbstractExpert {
 
     void process(const vector<Expert_Object> & expert_objs, Message & msg) {
         int tid = TidMapper::GetInstance()->GetTid();
+        #ifdef TEST_WITH_COUNT
+            metadata_->ResetTime();
+        #endif
 
         if (expert_objs[msg.meta.step].params.size() == 1) {
             InitWithoutIndex(tid, expert_objs, msg);
@@ -270,7 +273,6 @@ class InitExpert : public AbstractExpert {
             }
         }
 
-
         // update meta
         m.step++;
         m.msg_type = MSG_T::SPAWN;
@@ -284,11 +286,18 @@ class InitExpert : public AbstractExpert {
         for (auto& msg : *msg_vec) {
             msg.meta.qid = m.qid;
             msg.meta.msg_type = m.msg_type;
-            msg.meta.recver_nid = m.recver_nid;
-            msg.meta.recver_tid = core_affinity_->GetThreadIdForExpert(expert_objs[m.step].expert_type);
+            msg.meta.recver_nid = m.recver_nid;          
+            msg.meta.recver_tid = core_affinity_->GetThreadIdForExpert(expert_objs[m.step].expert_type);      
             msg.meta.parent_nid = m.parent_nid;
             msg.meta.parent_tid = m.parent_tid;
+             #ifdef DEBUG
+                cout << "Start send" << endl;            
+            #endif // DEBUG
             mailbox_->Send(tid, msg);
+            #ifdef DEBUG
+                cout << "Send success" << endl;            
+            #endif // DEBUG
+
         }
         thread_mutex_.unlock();
     }

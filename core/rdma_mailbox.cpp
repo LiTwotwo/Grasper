@@ -70,7 +70,14 @@ void RdmaMailbox::Sweep(int tid) {
 
 int RdmaMailbox::Send(int tid, const Message & msg) {
     if (msg.meta.recver_nid == node_.get_local_rank()) {
+        #ifdef DEBUG
+            asm volatile("":::"memory");      
+            cout << "Start push" << endl;     
+        #endif       
         local_msgs[msg.meta.recver_tid]->Push(msg);
+        #ifdef DEBUG
+            cout << "Local send success" << endl;        
+        #endif // DEBUG
     } else {
         mailbox_data_t data;
         data.dst_nid = msg.meta.recver_nid;

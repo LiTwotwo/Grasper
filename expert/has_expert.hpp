@@ -107,15 +107,20 @@ class HasExpert : public AbstractExpert {
             Vertex vtx;
             metadata_->GetVertex(tid, v_id, vtx);
             vector<label_t> vp_list;
-            metadata_->GetVPList(tid, vtx, vp_list);
+            metadata_->GetVPList(vtx.label, vp_list);
+            #ifdef DEBUG
+            for(auto vp : vp_list) {
+                cout << vp << " ";
+            }
+            cout << endl;
+            #endif
 
             for (auto & pred_pair : pred_chain) {
                 int pid = pred_pair.first;
-                PredicateValue pred = pred_pair.second;
-
-                #ifdef TEST_WITH_COUNT
-                    metadata_->RecordVtx(VP_NBS * sizeof(label_t));
+                #ifdef DEBUG
+                    cout << "pid = " << pid << endl;
                 #endif
+                PredicateValue pred = pred_pair.second;
 
                 if (pid == -1) {
                     int counter = vp_list.size();
@@ -169,18 +174,15 @@ class HasExpert : public AbstractExpert {
         auto checkFunction = [&](value_t& value) {
             eid_t e_id;
             uint2eid_t(Tool::value_t2uint64_t(value), e_id);
-            Edge edge;
-            metadata_->GetEdge(tid, e_id, edge);
+            label_t label;
+            metadata_->GetLabelForEdge(tid, e_id, label);
             vector<label_t> ep_list;
-            int sz = metadata_->GetEPList(tid, edge, ep_list);
+            metadata_->GetEPList(label, ep_list);
 
             for (auto & pred_pair : pred_chain) {
                 int pid = pred_pair.first;
                 PredicateValue pred = pred_pair.second;
 
-                #ifdef TEST_WITH_COUNT
-                    metadata_->RecordEdg(sz* sizeof(label_t));
-                #endif
                 if (pid == -1) {
                     int counter = ep_list.size();
                     for (auto & pkey : ep_list) {
@@ -239,9 +241,6 @@ class HasExpert : public AbstractExpert {
                 cache.insert_properties(vp_id.value(), val);
             }
         }
-        #ifdef TEST_WITH_COUNT
-            metadata_->RecordVp(val.content.size());
-        #endif
     }
 
     void get_properties_for_edge(int tid, epid_t ep_id, value_t & val) {
@@ -253,9 +252,6 @@ class HasExpert : public AbstractExpert {
                 cache.insert_properties(ep_id.value(), val);
             }
         }
-        #ifdef TEST_WITH_COUNT
-            metadata_->RecordEp(val.content.size());
-        #endif
     }
 };
 

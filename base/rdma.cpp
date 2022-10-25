@@ -24,7 +24,6 @@
 
 Authors: Hongzhi Chen (hzchen@cse.cuhk.edu.hk)
 */
-#pragma once
 #include "base/rdma.hpp"
 
 RDMA_Device::RDMA_Device(int num_nodes, int num_threads, int nid, char *mem, uint64_t mem_sz, vector<Node> & nodes, Node & remote) : num_threads_(num_threads) {
@@ -145,5 +144,5 @@ void RDMA_init(int num_nodes,  int num_threads, int nid, char *mem, uint64_t mem
     rdma.init_dev(num_nodes, num_threads, nid, mem, mem_sz, nodes, remote);
 
     t = timer::get_usec() - t;
-    cout << "INFO: initializing RDMA done (" << t / 1000  << " ms)" << endl;
+    std::cout << "INFO: initializing RDMA done (" << t / 1000  << " ms)" << std::endl;
 }

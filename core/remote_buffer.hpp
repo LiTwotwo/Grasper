@@ -21,7 +21,6 @@ class RemoteBuffer {
         memset(remote_buffer_, 0, config_->remote_buffer_sz);
 
         config_->vtx_store = remote_buffer_ + config_->vertex_offset;
-        config_->edge_store = remote_buffer_ + config_->edge_offset;
         config_->kvstore = remote_buffer_ + config_->kvstore_offset;
     }
 

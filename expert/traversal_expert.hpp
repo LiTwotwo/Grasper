@@ -111,46 +111,37 @@ class TraversalExpert : public AbstractExpert {
                 // for each neighbor, create a new value_t and store into newData
                 // IN & BOTH
                 if (dir != Direction_T::OUT) {
-                    vector<vid_t> in_nbs;
+                    vector<Nbs_pair> in_nbs;
                     int sz = metadata_->GetInNbs(tid, vtx, in_nbs);
-                    #ifdef TEST_WITH_COUNT
-                        metadata_->RecordVin(sz*sizeof(vid_t));
-                    #endif
+                    
                     for (auto & in_nb : in_nbs) {  // in_nb : vid_t
                         // Get edge_id
                         if (lid > 0) {
-                            eid_t e_id(cur_vtx_id.value(), in_nb.value());
-                            label_t label;
-                            get_label_for_edge(tid, e_id, label);
+                            label_t label = in_nb.label;
 
                             if (label != lid) {
                                 continue;
                             }
                         }
                         value_t new_value;
-                        Tool::str2int(to_string(in_nb.value()), new_value);
+                        Tool::str2int(to_string(in_nb.vid.value()), new_value);
                         newData.push_back(new_value);
                     }
                 }
                 // OUT & BOTH
                 if (dir != Direction_T::IN) {
-                    vector<vid_t> out_nbs;
+                    vector<Nbs_pair> out_nbs;
                     int sz = metadata_->GetOutNbs(tid, vtx, out_nbs);
-                    #ifdef TEST_WITH_COUNT
-                        metadata_->RecordVout(sz*sizeof(vid_t));
-                    #endif
                     for (auto & out_nb : out_nbs) {
                         if (lid > 0) {
-                            eid_t e_id(out_nb.value(), cur_vtx_id.value());
-                            label_t label;
-                            get_label_for_edge(tid, e_id, label);
+                            label_t label = out_nb.label;
 
                             if (label != lid) {
                                 continue;
                             }
                         }
                         value_t new_value;
-                        Tool::str2int(to_string(out_nb.value()), new_value);
+                        Tool::str2int(to_string(out_nb.vid.value()), new_value);
                         newData.push_back(new_value);
                     }
                 }
@@ -173,19 +164,14 @@ class TraversalExpert : public AbstractExpert {
                 metadata_->GetVertex(tid, cur_vtx_id, vtx);
 
                 if (dir != Direction_T::OUT) {
-                    vector<vid_t> in_nbs;
+                    vector<Nbs_pair> in_nbs;
                     int sz = metadata_->GetInNbs(tid, vtx, in_nbs);
-
-                    #ifdef TEST_WITH_COUNT
-                        metadata_->RecordVin(sz*sizeof(vid_t));
-                    #endif
 
                     for (auto & in_nb : in_nbs) {  // in_nb : vid_t
                         // Get edge_id
-                        eid_t e_id(cur_vtx_id.value(), in_nb.value());
+                        eid_t e_id(cur_vtx_id.value(), in_nb.vid.value());
                         if (lid > 0) {
-                            label_t label;
-                            get_label_for_edge(tid, e_id, label);
+                            label_t label = in_nb.label;
 
                             if (label != lid) {
                                 continue;
@@ -198,18 +184,13 @@ class TraversalExpert : public AbstractExpert {
                 }
 
                 if (dir != Direction_T::IN) {
-                    vector<vid_t> out_nbs;
+                    vector<Nbs_pair> out_nbs;
                     int sz = metadata_->GetOutNbs(tid, vtx, out_nbs);
-
-                    #ifdef TEST_WITH_COUNT
-                        metadata_->RecordVout(out_nbs.size()*sizeof(vid_t));
-                    #endif
                     for (auto & out_nb : out_nbs) {
                         // Get edge_id
-                        eid_t e_id(out_nb.value(), cur_vtx_id.value());
+                        eid_t e_id(out_nb.vid.value(), cur_vtx_id.value());
                         if (lid > 0) {
-                            label_t label;
-                            get_label_for_edge(tid, e_id, label);
+                            label_t label = out_nb.label;
 
                             if (label != lid) {
                                 continue;

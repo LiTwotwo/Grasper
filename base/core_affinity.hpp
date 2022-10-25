@@ -42,7 +42,6 @@ using namespace std;
 class CoreAffinity {
  public:
     CoreAffinity() {
-        std::cout << "In constructor" << std::endl;
         config_ = Config::GetInstance();
     }
 
@@ -73,7 +72,7 @@ class CoreAffinity {
         load_steal_list();
     }
 
-    bool BindToCore(int tid) {
+    void BindToCore(int tid) {
         // notice that this function is called in
         // void ThreadExecutor(int tid) {
         //    if (config_->global_enable_core_binding) {

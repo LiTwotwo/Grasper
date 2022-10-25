@@ -18,7 +18,7 @@
 
 /* Vertex:
  * Vertices are stored in an array
- * need to config IN_NBS, OUT_NBS and VP_NBS in layout.hpp
+ * need to config IN_NBS, OUT_NBS in layout.hpp
  * */
 
 class VertexTable
