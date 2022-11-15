@@ -21,6 +21,9 @@ MetaData::~MetaData() {
     std::cout << "Delete metadata" << std::endl;    
     delete vpstore_;
     delete epstore_;
+    #ifdef TEST_WITH_COUNT
+        resultF.close();
+    #endif // DEBUG
 }
 
 void MetaData::Init(vector<Node> & nodes, GraphMeta& graphmeta) {
@@ -36,7 +39,12 @@ void MetaData::Init(vector<Node> & nodes, GraphMeta& graphmeta) {
     epstore_->init(nodes, graphmeta.ep_off, graphmeta.ep_num_slots, graphmeta.ep_num_buckets);
 
 #ifdef TEST_WITH_COUNT
-    InitCounter(); 
+    InitCounter();
+    access_counter_.resize(9);
+    access_list_.clear(); 
+    resultF.open("result.csv");
+    for(auto str : accessType)
+        resultF << str << ",";
 #endif
 }
 
@@ -62,7 +70,8 @@ void MetaData::GetVertex(int tid, vid_t v_id, Vertex& v) {
     memcpy(&v, send_buf, sizeof(Vertex));
 
     #ifdef TEST_WITH_COUNT
-        RecordVtx(sizeof(Vertex));
+        // RecordVtx(sizeof(Vertex));
+        RecordAccess(ACCESS_T::VTX);
     #endif // DEBUG
     return;
 }
@@ -91,7 +100,8 @@ int MetaData::GetInNbs(int tid, Vertex& v, vector<Nbs_pair>& in_nbs) {
         }
 
         #ifdef TEST_WITH_COUNT
-            RecordVin(num*sizeof(Nbs_pair));
+            RecordAccess(ACCESS_T::INNBS);
+            // RecordVin(num*sizeof(Nbs_pair));
         #endif
     }
 #ifdef DEBUG
@@ -128,7 +138,8 @@ int MetaData::GetOutNbs(int tid, Vertex& v, vector<Nbs_pair>& out_nbs) {
         }
 
         #ifdef TEST_WITH_COUNT
-            RecordVout(num*sizeof(Nbs_pair));
+            // RecordVout(num*sizeof(Nbs_pair));
+            RecordAccess(ACCESS_T::OUTNBS);
         #endif
     }
 #ifdef DEBUG
@@ -140,19 +151,6 @@ int MetaData::GetOutNbs(int tid, Vertex& v, vector<Nbs_pair>& out_nbs) {
 #endif
     return size;
 };
-
-label_t MetaData::GetEdgeLabel(int tid, eid_t e_id) {
-    Vertex src;
-    GetVertex(tid, e_id.in_v, src);
-    vector<Nbs_pair> out_nbs;
-    int sz = GetOutNbs(tid, src, out_nbs);
-    for(int i = 0; i < sz; ++i) {
-        if(out_nbs[i].vid == e_id.out_v) {
-            return out_nbs[i].label;
-        }
-    }
-    return 0;
-}
 
 void MetaData::GetAllVertices(int tid, vector<vid_t> & vid_list) {
     uint64_t buf_size = buffer_->GetSendBufSize();
@@ -179,7 +177,7 @@ void MetaData::GetAllVertices(int tid, vector<vid_t> & vid_list) {
     }
 
     #ifdef TEST_WITH_COUNT
-        RecordVtx(sizeof(Vertex)*v_num_);
+        // RecordVtx(sizeof(Vertex)*v_num_);
     #endif
 }
 
@@ -212,7 +210,7 @@ void MetaData::GetAllEdges(int tid, vector<eid_t> & eid_list) {
     }
 
     #ifdef TEST_WITH_COUNT
-        RecordVtx(sizeof(Vertex)*v_num_);
+        // RecordVtx(sizeof(Vertex)*v_num_);
     #endif
 }
 
@@ -228,7 +226,8 @@ bool MetaData::GetPropertyForVertex(int tid, vpid_t vp_id, value_t & val) {
     vpstore_->get_property_remote(tid, REMOTE_NID, vp_id.value(), val);
 
     #ifdef TEST_WITH_COUNT
-        RecordVp(val.content.size());
+        // RecordVp(val.content.size());
+        RecordAccess(ACCESS_T::VP);
     #endif
     if (val.content.size())
         return true;
@@ -240,7 +239,8 @@ bool MetaData::GetPropertyForEdge(int tid, epid_t ep_id, value_t & val) {
 
 
     #ifdef TEST_WITH_COUNT
-        RecordEp(val.content.size());
+        // RecordEp(val.content.size());
+        RecordAccess(ACCESS_T::EP);
     #endif
     if (val.content.size())
         return true;
@@ -252,6 +252,9 @@ bool MetaData::GetLabelForVertex(int tid, vid_t vid, label_t & label) {
     Vertex v;
     GetVertex(tid, vid, v);
     label = v.label;
+    #ifdef TEST_WITH_COUNT
+        RecordAccess(ACCESS_T::VLABEL);
+    #endif // DEBUG
     return true;
 }
 
@@ -267,6 +270,9 @@ bool MetaData::GetLabelForEdge(int tid, eid_t eid, label_t & label) {
             break;
         }
     }
+    #ifdef TEST_WITH_COUNT
+        RecordAccess(ACCESS_T::ELABEL);
+    #endif // DEBUG
     return true;
 }
 
@@ -530,11 +536,18 @@ void MetaData::get_schema() {
 
 void MetaData::GetVPList(label_t label, vector<label_t>& vp_list) {
     vp_list.insert(vp_list.begin(), vtx_schemas[label].begin(), vtx_schemas[label].end());
+    #ifdef TEST_WITH_COUNT
+        RecordAccess(ACCESS_T::VPList);
+    #endif
     return;
 }
 
 void MetaData::GetEPList(label_t label, vector<label_t>& ep_list) {
+
     ep_list.insert(ep_list.begin(), edge_schemas[label].begin(), edge_schemas[label].end());
+    #ifdef TEST_WITH_COUNT
+        RecordAccess(ACCESS_T::EPList);
+    #endif
     return;
 }
 
@@ -558,7 +571,10 @@ void MetaData::InitCounter() {
 void MetaData::ResetTime() {
     total_time_ = 0;
     has_time_ = 0;
-    traversal_time_ = 0;
+    traversal_time_ = 0;    
+    for(auto it = access_counter_.begin(); it != access_counter_.end(); ++it) {
+            *it = 0;
+    }
     return;
 }
 
@@ -581,16 +597,22 @@ void MetaData::PrintTimeRatio() {
     std::cout << "Has Ratio = " << has_time_/total_time_ << std::endl;
     std::cout << "Traversal Ratio = " << traversal_time_/total_time_ << std::endl;
     std::cout << "Total time = " << total_time_ << std::endl;
+
+    ofstream resultf;
+    resultf.open("result.csv", ios::app);
+    for(auto it = access_counter_.begin(); it != access_counter_.end(); ++it) {
+            resultf << *it << ",";
+    }
+    for(ACCESS_T type : access_list_) {
+        resultf << accessType[static_cast<int>(type)] << " ";
+    }
+    resultf << "," << total_time_ << "\n";
     return;
 }
 
 void MetaData::RecordVtx(int size) {
     vtx_counter_ += 1;
     vtx_sizes_.push_back(size);
-}
-void MetaData::RecordEdg(int size) {
-    edg_counter_ += 1;
-    edg_sizes_.push_back(size);
 }
 void MetaData::RecordVp(int size) {
     vp_counter_ += 1;
@@ -612,6 +634,16 @@ void MetaData::RecordVtxExt(int size) {
     vtx_ext_counter_ += 1;
     vtx_sizes_.push_back(size);
 }
+void MetaData::RecordAccess(ACCESS_T type) {
+    access_counter_[static_cast<int>(type)]++;
+    if(access_list_.empty())
+        access_list_.push_back(type);
+    else {
+        if(access_list_.back() != type)
+            access_list_.push_back(type);
+    }
+}
+
 void MetaData::PrintCounter() {
     if(vtx_counter_ || vtx_ext_counter_ || edg_counter_ || vin_nbs_counter_ || vout_nbs_counter_ || vp_counter_ || ep_counter_ )
         std::cout << "============================================" << std::endl;

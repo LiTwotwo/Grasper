@@ -167,5 +167,7 @@ bool Evaluate(Predicate_T pred_type, value_t & val1, value_t & val2) {
             return val1 > val2;
         case Predicate_T::GTE:
             return val1 >= val2;
+        default:
+            return false;
     }
 }

@@ -52,6 +52,7 @@ class IndexExpert : public AbstractExpert {
 
         string ena = (enabled? "enabled":"disabled");
         string s = "Index is " + ena + " in node" + to_string(m.recver_nid);
+        std::cout << "Index size = " << index_store_->GetIndexSize() / 1024 << " KB" << std::endl;
         value_t v;
         Tool::str2str(s, v);
         msg.data.emplace_back(history_t(), vector<value_t>{v});

@@ -136,7 +136,8 @@ class Config {
     void Init() {
         dictionary *ini;
         int val, val_not_found = -1;
-        char *str, *str_not_found = "null";
+        char *str;
+        const char* str_not_found = "null";
 
         Node node = Node::StaticInstance();
 
@@ -154,7 +155,7 @@ class Config {
         }
 
         // [HDFS]
-        str = iniparser_getstring(ini, "HDFS:HDFS_HOST_ADDRESS", str_not_found);
+        str = iniparser_getstring(ini, "HDFS:HDFS_HOST_ADDRESS", const_cast<char *>(str_not_found));
         if (strcmp(str, str_not_found) != 0) {
             HDFS_HOST_ADDRESS = str;
         } else {
@@ -170,7 +171,7 @@ class Config {
             exit(-1);
         }
 
-        str = iniparser_getstring(ini, "HDFS:HDFS_INPUT_PATH", str_not_found);
+        str = iniparser_getstring(ini, "HDFS:HDFS_INPUT_PATH", const_cast<char *>(str_not_found));
         if (strcmp(str, str_not_found) != 0) {
             HDFS_INPUT_PATH = str;
         } else {
@@ -178,7 +179,7 @@ class Config {
             exit(-1);
         }
 
-        str = iniparser_getstring(ini, "HDFS:HDFS_INDEX_PATH", str_not_found);
+        str = iniparser_getstring(ini, "HDFS:HDFS_INDEX_PATH", const_cast<char *>(str_not_found));
         if (strcmp(str, str_not_found) != 0) {
             HDFS_INDEX_PATH = str;
         } else {
@@ -186,7 +187,7 @@ class Config {
             exit(-1);
         }
 
-        str = iniparser_getstring(ini, "HDFS:HDFS_VTX_SUBFOLDER", str_not_found);
+        str = iniparser_getstring(ini, "HDFS:HDFS_VTX_SUBFOLDER", const_cast<char *>(str_not_found));
         if (strcmp(str, str_not_found) != 0) {
             HDFS_VTX_SUBFOLDER = str;
         } else {
@@ -194,7 +195,7 @@ class Config {
             exit(-1);
         }
 
-        str = iniparser_getstring(ini, "HDFS:HDFS_VP_SUBFOLDER", str_not_found);
+        str = iniparser_getstring(ini, "HDFS:HDFS_VP_SUBFOLDER", const_cast<char *>(str_not_found));
         if (strcmp(str, str_not_found) != 0) {
             HDFS_VP_SUBFOLDER = str;
         } else {
@@ -202,7 +203,7 @@ class Config {
             exit(-1);
         }
 
-        str = iniparser_getstring(ini, "HDFS:HDFS_EP_SUBFOLDER", str_not_found);
+        str = iniparser_getstring(ini, "HDFS:HDFS_EP_SUBFOLDER", const_cast<char *>(str_not_found));
         if (strcmp(str, str_not_found) != 0) {
             HDFS_EP_SUBFOLDER = str;
         } else {
@@ -210,7 +211,7 @@ class Config {
             exit(-1);
         }
 
-        str = iniparser_getstring(ini, "HDFS:HDFS_OUTPUT_PATH", str_not_found);
+        str = iniparser_getstring(ini, "HDFS:HDFS_OUTPUT_PATH", const_cast<char *>(str_not_found));
         if (strcmp(str, str_not_found) != 0) {
             HDFS_OUTPUT_PATH = str;
         } else {
@@ -349,7 +350,7 @@ class Config {
             exit(-1);
         }
 
-        str = iniparser_getstring(ini, "SYSTEM:SNAPSHOT_PATH", str_not_found);
+        str = iniparser_getstring(ini, "SYSTEM:SNAPSHOT_PATH", const_cast<char *>(str_not_found));
 
         if (strcmp(str, str_not_found) != 0) {
             // analyse snapshot_path to absolute path

@@ -27,7 +27,7 @@ Authors: Hongzhi Chen (hzchen@cse.cuhk.edu.hk)
 
 #pragma once
 
-#pragma GCC diagnostic warning "-fpermissive"
+// #pragma GCC diagnostic warning "-fpermissive"
 
 #include <vector>
 #include <string>

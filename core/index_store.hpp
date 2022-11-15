@@ -20,6 +20,21 @@ class IndexStore {
         config_ = Config::GetInstance();
     }
 
+    uint64_t GetIndexSize() {
+        uint64_t sum = 0;
+        sum += sizeof(vtx_index);
+        for(auto it = vtx_index.begin(); it != vtx_index.end(); ++it) {
+            sum += sizeof(it->first);
+            index_& idx = it->second;
+            sum += idx.no_key.size() * sizeof(value_t) + idx.values.size() * sizeof(const value_t*) + sizeof(idx.count_map) + sizeof(idx.index_map);
+            for(auto it2 = idx.count_map.begin(); it2 != idx.count_map.end(); ++it2)
+                sum += sizeof(it2->first) + sizeof(it2->second);
+            for(auto it2 = idx.index_map.begin(); it2 != idx.index_map.end(); ++it2)
+                sum += sizeof(it2->first) + sizeof(value_t) * it2->second.size();
+        }
+        return sum;
+    }
+
     bool IsIndexEnabled(Element_T type, int pid, PredicateValue* pred = NULL, uint64_t* count = NULL) {
         if (config_->global_enable_indexing) {
             unordered_map<int, index_>* m;
@@ -116,6 +131,7 @@ class IndexStore {
     }
 
     void GetElements(Element_T type, vector<pair<int, PredicateValue>>& pred_chain, vector<value_t>& data) {
+        std::cout << "Get element " << std::endl;
         bool is_first = true;
         bool need_sort = pred_chain.size() != 1;
         for (auto& pred_pair : pred_chain) {

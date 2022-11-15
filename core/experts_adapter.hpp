@@ -162,7 +162,7 @@ class ExpertAdapter {
             #ifdef TEST_WITH_COUNT
                 uint64_t end_t = timer::get_usec();
                 if(strcmp(ExpertType[int(next_expert)], "END") != 0) 
-                    std::cout << "Expert is " << ExpertType[int(next_expert)] << " which consume " << (end_t-start_t)/1000  << "us"<< std::endl;
+                    std::cout << "Expert is " << ExpertType[int(next_expert)] << " which consume " << (end_t-start_t)/1000.0  << "us"<< std::endl;
                 if(strcmp(ExpertType[int(next_expert)], "TRAVERSAL") == 0) {
                     metadata_->GetTraselTime((end_t-start_t));
                 }

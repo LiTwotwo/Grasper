@@ -86,6 +86,7 @@ int RdmaMailbox::Send(int tid, const Message & msg) {
 
         pending_msgs[tid].push_back(move(data));
     }
+    return 0;
 }
 
 bool RdmaMailbox::SendData(int tid, mailbox_data_t& data) {

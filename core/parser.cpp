@@ -181,7 +181,7 @@ bool Parser::IsValue(uint8_t& type) {
 }
 
 bool Parser::IsElement() {
-    return io_type_ == Element_T::VERTEX || io_type_ == Element_T::EDGE;
+    return static_cast<int>(io_type_) == static_cast<int>(Element_T::VERTEX) || static_cast<int>(io_type_) == static_cast<int>(Element_T::EDGE);
 }
 
 bool Parser::IsElement(Element_T& type) {

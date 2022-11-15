@@ -60,7 +60,8 @@ void node_barrier() {
 void load_hdfs_config() {
     dictionary *ini;
     double val, val_not_found = -1;
-    char *str, *str_not_found = "null";
+    char *str;
+    const char*str_not_found = "null";
 
     const char* GRASPER_HOME = getenv("GRASPER_HOME");
     if (GRASPER_HOME == NULL) {
@@ -76,7 +77,7 @@ void load_hdfs_config() {
     }
 
     // [HDFS]
-    str = iniparser_getstring(ini, "HDFS:HDFS_HOST_ADDRESS", str_not_found);
+    str = iniparser_getstring(ini, "HDFS:HDFS_HOST_ADDRESS", const_cast<char*>(str_not_found));
     if (strcmp(str, str_not_found) != 0) {
         HDFS_HOST_ADDRESS = str;
     } else {

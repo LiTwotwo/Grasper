@@ -47,6 +47,8 @@ class VKVStore {
 
     void ReadSnapshot();
     void WriteSnapshot();
+    
+    uint64_t vp_num_;
 
  private:
     Config * config_;

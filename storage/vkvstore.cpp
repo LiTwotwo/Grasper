@@ -89,6 +89,7 @@ done:
 void VKVStore::insert_single_vertex_property(VProperty* vp) {
     // Every <vpid_t, value_t>
     for (int i = 0; i < vp->plist.size(); i++) {
+        vp_num_++;
         V_KVpair v_kv = vp->plist[i];
         // insert key and get slot_id
         // key do not need to be hash
@@ -190,6 +191,8 @@ VKVStore::VKVStore(RemoteBuffer * buf) : buf_(buf) {
     mem_sz = GiB2B(config_->global_vertex_property_kv_sz_gb);
     offset = config_->kvstore_offset;
     HD_RATIO = config_->key_value_ratio_in_rdma;
+
+    vp_num_ = 0;
 
     // size for header and entry
     uint64_t header_sz = mem_sz * HD_RATIO / 100;

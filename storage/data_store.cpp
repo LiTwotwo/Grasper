@@ -60,7 +60,9 @@ void DataStore::LoadDataFromHDFS() {
     // }
     get_eplist();
     cout << "Remote Node " << node_.get_local_rank() << " Get_eplist() DONE !" << endl;
-
+    #ifdef TEST_WITH_COUNT
+        cout << "#ep = " << eplist.size() << endl;
+    #endif
     get_vertices();
     cout << "Remote Node " << node_.get_local_rank() << " Get_vertices() DONE !" << endl; // tmp vertices have been prepared
 
@@ -118,6 +120,9 @@ void DataStore::DataConverter() {
     //      but may need to buffer some hash meta(can reference FORD)  
     // if (!snapshot->TestRead("vkvstore")) {
         vpstore_->insert_vertex_properties(vplist);
+        #ifdef TEST_WITH_COUNT
+            cout << "#vp = " << vpstore_->vp_num_ << endl;
+        #endif // DEBUG
         // clean the vp_list
         for (int i = 0 ; i < vplist.size(); i++) {
             // cout << vplist[i]->DebugString();  // TEST
@@ -527,5 +532,6 @@ void DataStore::to_ep(char* line, vector<EProperty*> & eplist) {
 
         ep->plist.push_back(e_pair);
     }
-    eplist.push_back(ep);
+    if(kvpairs.size() > 0)
+        eplist.push_back(ep);
 }

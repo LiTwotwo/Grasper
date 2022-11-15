@@ -3,7 +3,7 @@
 Authors: Hongzhi Chen (hzchen@cse.cuhk.edu.hk)
 */
 
-#define USE_HDFS2_
+// #define USE_HDFS2_
 
 #include "utils/hdfs_core.hpp"
 #include "utils/global.hpp"

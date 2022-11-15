@@ -97,6 +97,7 @@ int TCPMailbox::Send(int tid, const Message & msg) {
         senders_[pcode]->send(zmq_msg, ZMQ_DONTWAIT);
         pthread_spin_unlock(&locks[pcode]);
     }
+    return 0;
 }
 
 bool TCPMailbox::TryRecv(int tid, Message & msg) {

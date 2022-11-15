@@ -49,5 +49,5 @@ double timer::get_timer(int i) {
 }
 
 void timer::print_timer(std::string str, int i) {
-     printf("%s : %f miliseconds\n", str, get_timer(i));
+     printf("%s : %f miliseconds\n", str.c_str(), get_timer(i));
 }

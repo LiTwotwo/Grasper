@@ -71,7 +71,6 @@ class MetaData {
     int GetOutNbs(int tid, Vertex& v, vector<Nbs_pair>& out_nbs);
 
     // Not directly access remote
-    label_t GetEdgeLabel(int tid, eid_t e_id);
     bool GetLabelForVertex(int tid, vid_t vid, label_t & label);
     bool GetLabelForEdge(int tid, eid_t eid, label_t & label);
 
@@ -118,6 +117,10 @@ class MetaData {
     void GetHasTime(double time);
     void AggTime(double time);
     void PrintTimeRatio();
+    
+    vector<uint64_t> access_counter_;
+    vector<ACCESS_T> access_list_;
+    std::ofstream resultF;
 #endif
 
     // load the index and data from HDFS
@@ -146,12 +149,12 @@ class MetaData {
 #ifdef TEST_WITH_COUNT
 // test with counter functions
     void RecordVtx(int size);
-    void RecordEdg(int size);
     void RecordVp(int size);
     void RecordEp(int size);
     void RecordVin(int size); 
     void RecordVout(int size); 
     void RecordVtxExt(int size);
+    void RecordAccess(ACCESS_T type);
 
     int vtx_counter_;
     vector<int> vtx_sizes_;

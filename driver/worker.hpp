@@ -474,7 +474,9 @@ class Worker {
                 sprintf(addr, "tcp://%s:%d", re.hostname.c_str(), workers_[my_node_.get_local_rank()].tcp_port + my_node_.get_world_rank() + 1);
                 sender.connect(addr);
                 cout << "worker_node" << my_node_.get_local_rank() << " sends the results to Client " << re.hostname << endl;
-                metadata_->PrintTimeRatio();
+                #ifdef TEST_WITH_COUNT
+                    metadata_->PrintTimeRatio();
+                #endif // DEBUG
                 sender.send(msg);
 
                 // monitor.IncreaseCounter(1);
