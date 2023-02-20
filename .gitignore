@@ -7,5 +7,5 @@ cmake/modules/ibverbs.cmake
 cmake/modules/tbb.cmake
 cmake/modules/zmq.cmake
 .vscode/
-data/
+test_data/
 *.log
