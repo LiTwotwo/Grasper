@@ -8,6 +8,8 @@
 
 #pragma once
 #define TEST_WITH_COUNT
+// #define OP_BATCH
+#define MTU 4096
 // #define DEBUG
 
 #include <mutex>
@@ -59,6 +61,7 @@ class MetaData {
 
     // access remote
     void GetVertex(int tid, vid_t v_id, Vertex& v);
+    void GetVertexBatch(int tid, vector<vid_t> v_ids, vector<Vertex>& v);
 
     void GetAllVertices(int tid, vector<vid_t> & vid_list);
     void GetAllEdges(int tid, vector<eid_t> & eid_list);

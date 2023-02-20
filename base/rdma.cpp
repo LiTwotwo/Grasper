@@ -116,6 +116,60 @@ int RDMA_Device::RdmaRead(int dst_tid, int dst_nid, char *local, uint64_t size, 
     return 0;
 }
 
+
+/* This is a sync batch read completion
+*  param:
+*  dst_tid: remote node thread id
+*  dst_nid: remote node node id
+*  local: address of the buffer to read from / write to
+*  size: length of the buffer in bytes  
+*  off: start offset of remote memory block to access
+*/
+int RDMA_Device::RdmaReadBatch(int dst_tid, int dst_nid, char*local, uint64_t size, vector<uint64_t>& off, uint64_t begin, uint64_t num) {
+    RCQP* qp = qp_man_->GetRemoteDataQPWithNodeID(dst_nid);
+
+    struct ibv_send_wr sr[num];
+    
+    struct ibv_sge sge[num];
+
+    struct ibv_send_wr* bad_sr;
+
+    for(int i = 0; i < num; ++i) {
+        // setting the SGE
+        sge[i].addr = (uint64_t)local + size*i; 
+        sge[i].length = size; // all vertex size are same
+        sge[i].lkey = qp->local_mr_.key;
+
+        // setting sr, sr has to be initialized in this style
+        sr[i].wr_id = 0;
+        sr[i].opcode = IBV_WR_RDMA_READ;
+        sr[i].num_sge = 1;
+        sr[i].next = (i == num -1) ? NULL : &(sr[i+1]) ;
+        
+        sr[i].sg_list = &sge[i];
+        sr[i].send_flags = 0;
+        sr[i].imm_data = 0;
+
+        sr[i].wr.rdma.remote_addr = qp->remote_mr_.buf + off[begin + i];
+        sr[i].wr.rdma.rkey = qp->remote_mr_.key;
+    }
+    // sr[num-1].wr_id = 0;
+    sr[num-1].send_flags = IBV_SEND_SIGNALED;
+    auto rc = qp->post_batch(&(sr[0]), &bad_sr);
+    if(rc != SUCC) {
+        RDMA_LOG(ERROR) << "client: post batch failed. rc = " << rc;
+        return -1;
+    }
+    
+    ibv_wc wc;
+    rc = qp->poll_till_completion(wc, no_timeout);
+    if(rc != SUCC) {
+        RDMA_LOG(ERROR) << "client: poll read failed. rc=" << rc;
+        return -1;
+    }
+    return 0;
+}
+
 int RDMA_Device::RdmaWrite(int dst_tid, int dst_nid, char *local, uint64_t size, uint64_t off) {
     RCQP * qp = qp_man_->GetRemoteDataQPWithNodeID(dst_nid);
 

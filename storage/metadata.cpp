@@ -42,7 +42,7 @@ void MetaData::Init(vector<Node> & nodes, GraphMeta& graphmeta) {
     InitCounter();
     access_counter_.resize(9);
     access_list_.clear(); 
-    resultF.open("result.csv");
+    resultF.open("result.csv", ios_base::app);
     for(auto str : accessType)
         resultF << str << ",";
 #endif
@@ -73,6 +73,38 @@ void MetaData::GetVertex(int tid, vid_t v_id, Vertex& v) {
         // RecordVtx(sizeof(Vertex));
         RecordAccess(ACCESS_T::VTX);
     #endif // DEBUG
+    return;
+
+}
+
+void MetaData::GetVertexBatch(int tid, vector<vid_t> v_ids, vector<Vertex>& vertice) {
+    char * send_buf = buffer_->GetSendBuf(tid);
+    vector<uint64_t> off;
+    for(auto vid: v_ids) {
+        off.push_back(v_array_off_ + vid.value() * sizeof(Vertex));
+    }
+
+    RDMA &rdma = RDMA::get_rdma();
+    int len, begin = 0;
+    int remain = off.size();   
+    while(remain > 0) {
+        len = remain > MTU/sizeof(Vertex) ? MTU/sizeof(Vertex): remain;
+
+        rdma.dev->RdmaReadBatch(tid, REMOTE_NID, send_buf, sizeof(Vertex), off, begin, len);
+
+        for(int i = 0; i < len; ++i) {
+            Vertex tmp;
+            memcpy(&tmp, send_buf + i * sizeof(Vertex), sizeof(Vertex));
+            vertice.emplace_back(tmp);
+        }
+
+        remain -= len;
+        begin += len;
+
+        #ifdef TEST_WITH_COUNT
+            RecordAccess(ACCESS_T::VTX);
+        #endif
+    }    
     return;
 }
 
@@ -603,10 +635,10 @@ void MetaData::PrintTimeRatio() {
     for(auto it = access_counter_.begin(); it != access_counter_.end(); ++it) {
             resultf << *it << ",";
     }
-    for(ACCESS_T type : access_list_) {
-        resultf << accessType[static_cast<int>(type)] << " ";
-    }
-    resultf << "," << total_time_ << "\n";
+    // for(ACCESS_T type : access_list_) {
+    //     resultf << accessType[static_cast<int>(type)] << " ";
+    // }
+    resultf << "," << total_time_/1000.0 << "\n";
     return;
 }
 

@@ -67,8 +67,14 @@ class HasExpert : public AbstractExpert {
 
         switch (inType) {
             case Element_T::VERTEX:
+            #ifdef OP_BATCH
+                EvaluateVertexBatch(tid, msg.data, pred_chain);
+            #else
                 EvaluateVertex(tid, msg.data, pred_chain);
+            #endif
+
                 break;
+
             case Element_T::EDGE:
                 EvaluateEdge(tid, msg.data, pred_chain);
                 break;
@@ -167,6 +173,80 @@ class HasExpert : public AbstractExpert {
 
         for (auto & data_pair : data) {
             data_pair.second.erase(remove_if(data_pair.second.begin(), data_pair.second.end(), checkFunction), data_pair.second.end());
+        }
+    }
+
+    void EvaluateVertexBatch(int tid, vector<pair<history_t, vector<value_t>>> & data, vector<pair<int, PredicateValue>> & pred_chain) {
+        for(auto & data_pair : data) {
+            vector<vid_t> v_ids;
+            for(auto val : data_pair.second) {
+                v_ids.emplace_back(Tool::value_t2int(val));
+            }
+            vector<Vertex> vertice;
+            metadata_->GetVertexBatch(tid, v_ids, vertice); 
+
+            int count = 0;
+            data_pair.second.erase(remove_if(data_pair.second.begin(), data_pair.second.end(), [&](value_t& value) {
+                vid_t v_id(Tool::value_t2int(value));
+                Vertex vtx = vertice[count++];
+                vector<label_t> vp_list;
+                metadata_->GetVPList(vtx.label, vp_list);
+                #ifdef DEBUG
+                for(auto vp : vp_list) {
+                    cout << vp << " ";
+                }
+                cout << endl;
+                #endif
+
+                for (auto & pred_pair : pred_chain) {
+                    int pid = pred_pair.first;
+                    #ifdef DEBUG
+                        cout << "pid = " << pid << endl;
+                    #endif
+                    PredicateValue pred = pred_pair.second;
+
+                    if (pid == -1) {
+                        int counter = vp_list.size();
+                        for (auto & pkey : vp_list) {
+                            vpid_t vp_id(v_id, pkey);
+
+                            value_t val;
+                            get_properties_for_vertex(tid, vp_id, val);
+
+                            if (!Evaluate(pred, &val)) {
+                                counter--;
+                            }
+                        }
+
+                        // Cannot match all properties, erase
+                        if (counter == 0) {
+                            return true;
+                        }
+                    } else {
+                        // Check whether key exists for this vtx
+                        if (find(vp_list.begin(), vp_list.end(), pid) == vp_list.end()) {
+                        // does not exist
+                        if (pred.pred_type == Predicate_T::NONE)
+                            continue;
+                        return true;
+                        }
+                        if (pred.pred_type == Predicate_T::ANY)
+                            continue;
+
+                        // Get Properties
+                        vpid_t vp_id(v_id, pid);
+                        value_t val;
+                        get_properties_for_vertex(tid, vp_id, val);
+
+                        // Erase when doesnt match
+                        if (!Evaluate(pred, &val)) {
+                            return true;
+                        }
+                    }
+                }
+
+                return false;
+            }), data_pair.second.end());
         }
     }
 

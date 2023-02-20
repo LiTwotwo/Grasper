@@ -77,6 +77,8 @@ public:
     // 0 on success, -1 otherwise
     int RdmaRead(int dst_tid, int dst_nid, char *local, uint64_t size, uint64_t off);
 
+    int RdmaReadBatch(int dst_tid, int dst_nid, char *local, uint64_t size, vector<uint64_t> &off, uint64_t begin, uint64_t len);
+
     int RdmaWrite(int dst_tid, int dst_nid, char *local, uint64_t size, uint64_t off);
 
         // int RdmaWriteSelective(int dst_tid, int dst_nid, char *local, uint64_t size, uint64_t off) {

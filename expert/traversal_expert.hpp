@@ -53,9 +53,17 @@ class TraversalExpert : public AbstractExpert {
         // Get Result
         if (inType == Element_T::VERTEX) {
             if (outType == Element_T::VERTEX) {
-                GetNeighborOfVertex(tid, lid, dir, msg.data);
+                #ifdef OP_BATCH 
+                    GetNeighborOfVertexBatch(tid, lid, dir, msg.data);
+                #else
+                    GetNeighborOfVertex(tid, lid, dir, msg.data);
+                #endif
             } else if (outType == Element_T::EDGE) {
-                GetEdgeOfVertex(tid, lid, dir, msg.data);
+                #ifdef OP_BATCH
+                    GetEdgeOfVertexBatch(tid, lid, dir, msg.data);
+                #else
+                    GetEdgeOfVertex(tid, lid, dir, msg.data);
+                #endif
             } else {
                 cout << "Wrong Out Element Type: " << outType << endl;
                 return;
@@ -152,6 +160,62 @@ class TraversalExpert : public AbstractExpert {
         }
     }
 
+    void GetNeighborOfVertexBatch(int tid, int lid, Direction_T dir, vector<pair<history_t, vector<value_t>>> & data) {
+        for (auto& pair : data) {
+            vector<value_t> newData;
+            vector<vid_t> vids;
+            for (auto & value : pair.second) {
+                // Get the current vertex id and use it to get vertex instance
+                vids.emplace_back(Tool::value_t2int(value));
+            }
+            vector<Vertex> vertice;
+            metadata_->GetVertexBatch(tid, vids, vertice);
+
+            for(auto vtx: vertice){
+                // for each neighbor, create a new value_t and store into newData
+                // IN & BOTH
+                if (dir != Direction_T::OUT) {
+                    vector<Nbs_pair> in_nbs;
+                    int sz = metadata_->GetInNbs(tid, vtx, in_nbs);
+                    
+                    for (auto & in_nb : in_nbs) {  // in_nb : vid_t
+                        // Get edge_id
+                        if (lid > 0) {
+                            label_t label = in_nb.label;
+
+                            if (label != lid) {
+                                continue;
+                            }
+                        }
+                        value_t new_value;
+                        Tool::str2int(to_string(in_nb.vid.value()), new_value);
+                        newData.push_back(new_value);
+                    }
+                }
+                // OUT & BOTH
+                if (dir != Direction_T::IN) {
+                    vector<Nbs_pair> out_nbs;
+                    int sz = metadata_->GetOutNbs(tid, vtx, out_nbs);
+                    for (auto & out_nb : out_nbs) {
+                        if (lid > 0) {
+                            label_t label = out_nb.label;
+
+                            if (label != lid) {
+                                continue;
+                            }
+                        }
+                        value_t new_value;
+                        Tool::str2int(to_string(out_nb.vid.value()), new_value);
+                        newData.push_back(new_value);
+                    }
+                }
+            }
+
+            // Replace pair.second with new data
+            pair.second.swap(newData);
+        }
+    }
+
     // Get IN/OUT/BOTH-E of Vertex
     void GetEdgeOfVertex(int tid, int lid, Direction_T dir, vector<pair<history_t, vector<value_t>>> & data) {
         for (auto& pair : data) {
@@ -189,6 +253,63 @@ class TraversalExpert : public AbstractExpert {
                     for (auto & out_nb : out_nbs) {
                         // Get edge_id
                         eid_t e_id(out_nb.vid.value(), cur_vtx_id.value());
+                        if (lid > 0) {
+                            label_t label = out_nb.label;
+
+                            if (label != lid) {
+                                continue;
+                            }
+                        }
+                        value_t new_value;
+                        Tool::str2uint64_t(to_string(e_id.value()), new_value);
+                        newData.push_back(new_value);
+                    }
+                }
+            }
+
+            // Replace pair.second with new data
+            pair.second.swap(newData);
+        }
+    }
+    void GetEdgeOfVertexBatch(int tid, int lid, Direction_T dir, vector<pair<history_t, vector<value_t>>> & data) {
+        for (auto& pair : data) {
+            vector<value_t> newData;
+            vector<vid_t> vids;
+
+            for (auto & value : pair.second) {
+                // Get the current vertex id and use it to get vertex instance
+                vids.emplace_back(Tool::value_t2int(value));
+            }
+            vector<Vertex> vertice;
+            metadata_->GetVertexBatch(tid, vids, vertice);
+
+            for(auto vtx:vertice) {
+                if (dir != Direction_T::OUT) {
+                    vector<Nbs_pair> in_nbs;
+                    int sz = metadata_->GetInNbs(tid, vtx, in_nbs);
+
+                    for (auto & in_nb : in_nbs) {  // in_nb : vid_t
+                        // Get edge_id
+                        eid_t e_id(vtx.id.value(), in_nb.vid.value());
+                        if (lid > 0) {
+                            label_t label = in_nb.label;
+
+                            if (label != lid) {
+                                continue;
+                            }
+                        }
+                        value_t new_value;
+                        Tool::str2uint64_t(to_string(e_id.value()), new_value);
+                        newData.push_back(new_value);
+                    }
+                }
+
+                if (dir != Direction_T::IN) {
+                    vector<Nbs_pair> out_nbs;
+                    int sz = metadata_->GetOutNbs(tid, vtx, out_nbs);
+                    for (auto & out_nb : out_nbs) {
+                        // Get edge_id
+                        eid_t e_id(out_nb.vid.value(), vtx.id.value());
                         if (lid > 0) {
                             label_t label = out_nb.label;
 
