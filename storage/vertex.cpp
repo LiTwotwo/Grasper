@@ -13,6 +13,10 @@ using namespace std;
 VertexTable::VertexTable(RemoteBuffer * buf) : buf_(buf) {
     config_ = Config::GetInstance();
     mem = config_->vtx_store;
+    vtx_in_nbs = config_->global_vertex_in_nbs;
+    vtx_out_nbs = config_->global_vertex_out_nbs;
+    vtx_table_num = config_->global_vertex_table_num;
+    vtx_base_ratio = config_->global_vertex_base_ratio;
     mem_size= GiB2B(config_->global_vertex_sz_gb);
     offset = config_->vertex_offset;
 
@@ -21,7 +25,11 @@ VertexTable::VertexTable(RemoteBuffer * buf) : buf_(buf) {
 
     num_vertices = main_size / sizeof(Vertex);
     main_size = num_vertices * sizeof(Vertex);
-    ext_size = mem_size - main_size;
+    // ext_size = mem_size - main_size;
+
+    // vertex size are divided into two part
+    // 1. every vertex has a small fixed number vertex table
+    // 2. super vertex extend in/out nbs by 100
 
     cout << "INFO: vertex = " << mem_size << " bytes " << std::endl
          << "      vertex number in main = " << num_vertices << std::endl

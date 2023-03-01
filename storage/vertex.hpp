@@ -45,11 +45,16 @@ private:
     RemoteBuffer * buf_;
     
     char* mem;
+    uint16_t vtx_in_nbs;
+    uint16_t vtx_out_nbs;
+    uint16_t vtx_table_num;
+    uint16_t vtx_base_ratio;
+
     uint64_t mem_size;
     uint64_t main_size;
     uint64_t ext_size;
     uint64_t offset;
-    static const int EXT_RATIO = 20; // ext size ratio
+    static const int EXT_RATIO = 80; // ext size ratio
 
     // use these two ptr to find vtx and ext
     Vertex * vtx_array;

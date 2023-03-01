@@ -59,6 +59,12 @@ class Config {
     int global_num_threads;
 
     int global_vertex_sz_gb;
+    int global_vertex_in_nbs;
+    int global_vertex_out_nbs;
+    int global_vertex_table_num;
+    int global_vertex_base_ratio;
+    int global_vertex_ext_ratio;
+
     int global_vertex_property_kv_sz_gb;
     int global_edge_property_kv_sz_gb;
 
@@ -243,6 +249,46 @@ class Config {
             global_vertex_sz_gb = val;
         } else {
             fprintf(stderr, "must enter the VTX_SZ_GB. exits\n");
+            exit(-1);
+        }
+
+        val = iniparser_getint(ini, "SYSTEM:VTX_IN_NBS", val_not_found);
+        if(val != val_not_found) {
+            global_vertex_in_nbs = val;
+        } else {
+            fprintf(stderr, "must enter the VTX_IN_NBS. exits\n");
+            exit(-1);
+        }
+
+        val = iniparser_getint(ini, "SYSTEM:VTX_OUT_NBS", val_not_found);
+        if(val != val_not_found) {
+            global_vertex_out_nbs = val;
+        } else {
+            fprintf(stderr, "must enter the VTX_OUT_NBS. exits\n");
+            exit(-1);
+        }
+
+        val = iniparser_getint(ini, "SYSTEM:VTX_TABLE_NUM", val_not_found);
+        if(val != val_not_found) {
+            global_vertex_table_num = val;
+        } else {
+            fprintf(stderr, "must enter the VTX_TABLE_NUM. exits\n");
+            exit(-1);
+        }
+
+        val = iniparser_getint(ini, "SYSTEM:VTX_BASE_RATIO", val_not_found);
+        if(val != val_not_found) {
+            global_vertex_base_ratio = val;
+        } else {
+            fprintf(stderr, "must enter the VTX_BASE_RATIO. exits\n");
+            exit(-1);
+        }
+
+        val = iniparser_getint(ini, "SYSTEM:VTX_EXT_RATIO", val_not_found);
+        if(val != val_not_found) {
+            global_vertex_ext_ratio = val;
+        } else {
+            fprintf(stderr, "must enter the VTX_EXT_RATIO. exits\n");
             exit(-1);
         }
 

@@ -13,8 +13,8 @@ Authors: Hongzhi Chen (hzchen@cse.cuhk.edu.hk)
 #include "base/type.hpp"
 #include "base/serialization.hpp"
 
-#define IN_NBS 3
-#define OUT_NBS 3
+#define IN_NBS 0
+#define OUT_NBS 0
 #define EP_NBS 1
 
 using namespace std;
