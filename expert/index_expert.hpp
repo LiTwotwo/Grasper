@@ -94,10 +94,10 @@ class IndexExpert : public AbstractExpert {
         for (auto& vid : vid_list) {
             value_t vtx_v;
             Tool::str2int(to_string(vid.value()), vtx_v);
-            Vertex vtx;
-            metadata_->GetVertex(tid, vid, vtx);
+            label_t v_label;
+            metadata_->GetLabelForVertex(tid, vid, v_label);
             vector<label_t> vp_list;
-            metadata_->GetVPList(vtx.label, vp_list);
+            metadata_->GetVPList(v_label, vp_list);
 
 
             if (pid != 0 && find(vp_list.begin(), vp_list.end(), pid) == vp_list.end()) {

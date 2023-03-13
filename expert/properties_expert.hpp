@@ -40,11 +40,7 @@ class PropertiesExpert : public AbstractExpert {
 
         switch (inType) {
             case Element_T::VERTEX:
-                #ifdef OP_BATCH
-                    get_properties_for_vertex_batch(tid, key_list, msg.data);
-                #else
-                    get_properties_for_vertex(tid, key_list, msg.data);
-                #endif
+                get_properties_for_vertex(tid, key_list, msg.data);
                 break;
             case Element_T::EDGE:
                 get_properties_for_edge(tid, key_list, msg.data);
@@ -84,23 +80,28 @@ class PropertiesExpert : public AbstractExpert {
 
             for (auto & value : pair.second) {
                 vid_t v_id(Tool::value_t2int(value));
-                Vertex vtx;
-                metadata_->GetVertex(tid, v_id, vtx);
+                label_t v_label;
+                metadata_->GetLabelForVertex(tid, v_id, v_label);
                 vector<label_t> vp_list;
-                metadata_->GetVPList(vtx.label, vp_list);
+                metadata_->GetVPList(v_label, vp_list);
 
                 if (key_list.empty()) {
                     for (auto & pkey : vp_list) {
                         vpid_t vp_id(v_id, pkey);
 
                         value_t val;
-                        // Try cache
-                        if (metadata_->VPKeyIsLocal(vp_id) || !config_->global_enable_caching) {
-                            metadata_->GetPropertyForVertex(tid, vp_id, val);
+                        if(pkey == 1) {
+                        // Property is id, use when id is not mapped
+                            val = value;
                         } else {
-                            if (!cache.get_property_from_cache(vp_id.value(), val)) {
+                            // Try cache
+                            if (metadata_->VPKeyIsLocal(vp_id) || !config_->global_enable_caching) {
                                 metadata_->GetPropertyForVertex(tid, vp_id, val);
-                                cache.insert_properties(vp_id.value(), val);
+                            } else {
+                                if (!cache.get_property_from_cache(vp_id.value(), val)) {
+                                    metadata_->GetPropertyForVertex(tid, vp_id, val);
+                                    cache.insert_properties(vp_id.value(), val);
+                                }
                             }
                         }
 
@@ -117,16 +118,22 @@ class PropertiesExpert : public AbstractExpert {
 
                         vpid_t vp_id(v_id, pkey);
                         value_t val;
-                        // Try cache
-                        if (metadata_->VPKeyIsLocal(vp_id) || !config_->global_enable_caching) {
-                            metadata_->GetPropertyForVertex(tid, vp_id, val);
-                        } else {
-                            if (!cache.get_property_from_cache(vp_id.value(), val)) {
-                                // not found in cache
-                                metadata_->GetPropertyForVertex(tid, vp_id, val);
-                                cache.insert_properties(vp_id.value(), val);
-                            }
+                        if(pkey == 1) {
+                            // Property is id, use when id is not mappped
+                            val = value;
                         }
+                        else {
+                              // Try cache
+                            if (metadata_->VPKeyIsLocal(vp_id) || !config_->global_enable_caching) {
+                                metadata_->GetPropertyForVertex(tid, vp_id, val);
+                            } else {
+                                if (!cache.get_property_from_cache(vp_id.value(), val)) {
+                                    // not found in cache
+                                    metadata_->GetPropertyForVertex(tid, vp_id, val);
+                                    cache.insert_properties(vp_id.value(), val);
+                                }
+                            }
+                        }                      
 
                         string keyStr;
                         metadata_->GetNameFromIndex(Index_T::V_PROPERTY, pkey, keyStr);
@@ -139,72 +146,7 @@ class PropertiesExpert : public AbstractExpert {
             pair.second.swap(newData);
         }
     }
-    void get_properties_for_vertex_batch(int tid, vector<int> & key_list, vector<pair<history_t, vector<value_t>>>& data) {
-        for (auto & pair : data) {
-            vector<std::pair<string, string>> result;
-            vector<value_t> newData;
-            vector<vid_t> vids;
-            for (auto & value : pair.second) {
-                vids.emplace_back(Tool::value_t2int(value));
-            }
-            vector<Vertex> vertice;
-            metadata_->GetVertexBatch(tid, vids, vertice);
-
-            for(auto vtx: vertice) {
-                vector<label_t> vp_list;
-                metadata_->GetVPList(vtx.label, vp_list);
-
-                if (key_list.empty()) {
-                    for (auto & pkey : vp_list) {
-                        vpid_t vp_id(vtx.id, pkey);
-
-                        value_t val;
-                        // Try cache
-                        if (metadata_->VPKeyIsLocal(vp_id) || !config_->global_enable_caching) {
-                            metadata_->GetPropertyForVertex(tid, vp_id, val);
-                        } else {
-                            if (!cache.get_property_from_cache(vp_id.value(), val)) {
-                                metadata_->GetPropertyForVertex(tid, vp_id, val);
-                                cache.insert_properties(vp_id.value(), val);
-                            }
-                        }
-
-                        string keyStr;
-                        metadata_->GetNameFromIndex(Index_T::V_PROPERTY, pkey, keyStr);
-
-                        result.emplace_back(keyStr, Tool::DebugString(val));
-                    }
-                } else {
-                    for (auto pkey : key_list) {
-                        if (find(vp_list.begin(), vp_list.end(), pkey) == vp_list.end()) {
-                            continue;
-                        }
-
-                        vpid_t vp_id(vtx.id, pkey);
-                        value_t val;
-                        // Try cache
-                        if (metadata_->VPKeyIsLocal(vp_id) || !config_->global_enable_caching) {
-                            metadata_->GetPropertyForVertex(tid, vp_id, val);
-                        } else {
-                            if (!cache.get_property_from_cache(vp_id.value(), val)) {
-                                // not found in cache
-                                metadata_->GetPropertyForVertex(tid, vp_id, val);
-                                cache.insert_properties(vp_id.value(), val);
-                            }
-                        }
-
-                        string keyStr;
-                        metadata_->GetNameFromIndex(Index_T::V_PROPERTY, pkey, keyStr);
-
-                        result.emplace_back(keyStr, Tool::DebugString(val));
-                    }
-                }
-            }
-            Tool::vec_pair2value_t(result, newData);
-            pair.second.swap(newData);
-        }
-    }
-
+    
     void get_properties_for_edge(int tid, vector<int> & key_list, vector<pair<history_t, vector<value_t>>>& data) {
         for (auto & pair : data) {
             vector<std::pair<string, string>> result;

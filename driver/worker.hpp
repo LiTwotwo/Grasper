@@ -411,8 +411,9 @@ class Worker {
         zmq::message_t metamsg(meta_size);
         remote_listener_->recv(&metamsg);
         m.assign((char *)metamsg.data(), meta_size, 0);
-        m >> graphmeta;
-
+        m >> graphmeta;    
+        cout << "Worker" << my_node_.get_local_rank()  << ": DONE -> Receive metadata" << endl;
+        cout << graphmeta.DebugString();
         metadata_ = new MetaData(my_node_, &id_mapper, buf_);
         MetaData::StaticInstanceP(metadata_);
         metadata_->Init(workers_, graphmeta);

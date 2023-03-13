@@ -38,11 +38,7 @@ class KeyExpert : public AbstractExpert {
 
         switch (inType) {
             case Element_T::VERTEX:
-                #ifdef OP_BATCH
-                    VertexKeysBatch(tid, msg.data);
-                #else
-                    VertexKeys(tid, msg.data);
-                #endif
+                VertexKeys(tid, msg.data);
                 break;
             case Element_T::EDGE:
                 EdgeKeys(tid, msg.data);
@@ -71,42 +67,16 @@ class KeyExpert : public AbstractExpert {
     // Pointer of mailbox
     AbstractMailbox * mailbox_;
 
-    void VertexKeysBatch(int tid, vector<pair<history_t, vector<value_t>>> & data) {
-        for (auto & data_pair : data) {
-            vector<value_t> newData;
-            vector<vid_t> vids;
-            for (auto & elem : data_pair.second) {
-                vids.emplace_back(Tool::value_t2int(elem));
-            }
-            vector<Vertex> vertice;
-            metadata_->GetVertexBatch(tid, vids, vertice);
-
-            for(auto vtx : vertice) {
-                vector<label_t> vp_list;
-                metadata_->GetVPList(vtx.label, vp_list);
-                for (auto & pkey : vp_list) {
-                    string keyStr;
-                    metadata_->GetNameFromIndex(Index_T::V_PROPERTY, pkey, keyStr);
-
-                    value_t val;
-                    Tool::str2str(keyStr, val);
-                    newData.push_back(val);
-                }
-            }
-            data_pair.second.swap(newData);
-        }
-    }
-
     void VertexKeys(int tid, vector<pair<history_t, vector<value_t>>> & data) {
         for (auto & data_pair : data) {
             vector<value_t> newData;
             for (auto & elem : data_pair.second) {
                 vid_t v_id(Tool::value_t2int(elem));
 
-                Vertex vtx;
-                metadata_->GetVertex(tid, v_id, vtx);
+                label_t v_label;
+                metadata_->GetLabelForVertex(tid, v_id, v_label);
                 vector<label_t> vp_list;
-                metadata_->GetVPList(vtx.label, vp_list);
+                metadata_->GetVPList(v_label, vp_list);
                 for (auto & pkey : vp_list) {
                     string keyStr;
                     metadata_->GetNameFromIndex(Index_T::V_PROPERTY, pkey, keyStr);

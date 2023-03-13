@@ -564,8 +564,10 @@ static const int NUM_THREAD_DIVISION = 6;
 static const int NUM_RESIDENT_THREAD = 4;
 
 enum class ACCESS_T : char {
-    VTX, INNBS, OUTNBS, VLABEL, ELABEL, VPList, EPList, VP, EP 
+    // VTX, INNBS, OUTNBS, VLABEL, ELABEL, VPList, EPList, VP, EP 
+    VTX, INNBS, OUTNBS, VP, EP 
     };
 
-static const char *accessType[] = { "VERETX", "INNBS", "OUTNBS", "VLABEL", "ELABEL", "VPList", "EPList", "VP", "EP"};
+// static const char *accessType[] = { "VERETX", "INNBS", "OUTNBS", "VLABEL", "ELABEL", "VPList", "EPList", "VP", "EP"};
+static const char *accessType[] = { "VERETX", "INNBS", "OUTNBS",  "VP", "EP"};
 #endif /* TYPE_HPP_ */

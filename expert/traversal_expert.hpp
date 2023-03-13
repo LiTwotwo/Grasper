@@ -113,14 +113,14 @@ class TraversalExpert : public AbstractExpert {
             for (auto & value : pair.second) {
                 // Get the current vertex id and use it to get vertex instance
                 vid_t cur_vtx_id(Tool::value_t2int(value));
-                Vertex vtx;
-                metadata_->GetVertex(tid, cur_vtx_id, vtx);
+                // Vertex vtx;
+                // metadata_->GetVertex(tid, cur_vtx_id, vtx);
 
                 // for each neighbor, create a new value_t and store into newData
                 // IN & BOTH
                 if (dir != Direction_T::OUT) {
                     vector<Nbs_pair> in_nbs;
-                    int sz = metadata_->GetInNbs(tid, vtx, in_nbs);
+                    int sz = metadata_->GetInNbs(tid, cur_vtx_id, in_nbs);
                     
                     for (auto & in_nb : in_nbs) {  // in_nb : vid_t
                         // Get edge_id
@@ -139,7 +139,7 @@ class TraversalExpert : public AbstractExpert {
                 // OUT & BOTH
                 if (dir != Direction_T::IN) {
                     vector<Nbs_pair> out_nbs;
-                    int sz = metadata_->GetOutNbs(tid, vtx, out_nbs);
+                    int sz = metadata_->GetOutNbs(tid, cur_vtx_id, out_nbs);
                     for (auto & out_nb : out_nbs) {
                         if (lid > 0) {
                             label_t label = out_nb.label;
@@ -168,15 +168,16 @@ class TraversalExpert : public AbstractExpert {
                 // Get the current vertex id and use it to get vertex instance
                 vids.emplace_back(Tool::value_t2int(value));
             }
-            vector<Vertex> vertice;
-            metadata_->GetVertexBatch(tid, vids, vertice);
+            // vector<Vertex> vertice;
+            // metadata_->GetVertexBatch(tid, vids, vertice);
 
-            for(auto vtx: vertice){
+            // for(auto vtx: vertice){
+            for(auto v_id: vids){
                 // for each neighbor, create a new value_t and store into newData
                 // IN & BOTH
                 if (dir != Direction_T::OUT) {
                     vector<Nbs_pair> in_nbs;
-                    int sz = metadata_->GetInNbs(tid, vtx, in_nbs);
+                    int sz = metadata_->GetInNbs(tid, v_id, in_nbs);
                     
                     for (auto & in_nb : in_nbs) {  // in_nb : vid_t
                         // Get edge_id
@@ -195,7 +196,7 @@ class TraversalExpert : public AbstractExpert {
                 // OUT & BOTH
                 if (dir != Direction_T::IN) {
                     vector<Nbs_pair> out_nbs;
-                    int sz = metadata_->GetOutNbs(tid, vtx, out_nbs);
+                    int sz = metadata_->GetOutNbs(tid, v_id, out_nbs);
                     for (auto & out_nb : out_nbs) {
                         if (lid > 0) {
                             label_t label = out_nb.label;
@@ -224,12 +225,12 @@ class TraversalExpert : public AbstractExpert {
             for (auto & value : pair.second) {
                 // Get the current vertex id and use it to get vertex instance
                 vid_t cur_vtx_id(Tool::value_t2int(value));
-                Vertex vtx;
-                metadata_->GetVertex(tid, cur_vtx_id, vtx);
+                // Vertex vtx;
+                // metadata_->GetVertex(tid, cur_vtx_id, vtx);
 
                 if (dir != Direction_T::OUT) {
                     vector<Nbs_pair> in_nbs;
-                    int sz = metadata_->GetInNbs(tid, vtx, in_nbs);
+                    int sz = metadata_->GetInNbs(tid, cur_vtx_id, in_nbs);
 
                     for (auto & in_nb : in_nbs) {  // in_nb : vid_t
                         // Get edge_id
@@ -249,7 +250,7 @@ class TraversalExpert : public AbstractExpert {
 
                 if (dir != Direction_T::IN) {
                     vector<Nbs_pair> out_nbs;
-                    int sz = metadata_->GetOutNbs(tid, vtx, out_nbs);
+                    int sz = metadata_->GetOutNbs(tid, cur_vtx_id, out_nbs);
                     for (auto & out_nb : out_nbs) {
                         // Get edge_id
                         eid_t e_id(out_nb.vid.value(), cur_vtx_id.value());
@@ -280,17 +281,17 @@ class TraversalExpert : public AbstractExpert {
                 // Get the current vertex id and use it to get vertex instance
                 vids.emplace_back(Tool::value_t2int(value));
             }
-            vector<Vertex> vertice;
-            metadata_->GetVertexBatch(tid, vids, vertice);
+            // vector<Vertex> vertice;
+            // metadata_->GetVertexBatch(tid, vids, vertice);
 
-            for(auto vtx:vertice) {
+            for(auto v_id : vids) {
                 if (dir != Direction_T::OUT) {
                     vector<Nbs_pair> in_nbs;
-                    int sz = metadata_->GetInNbs(tid, vtx, in_nbs);
+                    int sz = metadata_->GetInNbs(tid, v_id, in_nbs);
 
                     for (auto & in_nb : in_nbs) {  // in_nb : vid_t
                         // Get edge_id
-                        eid_t e_id(vtx.id.value(), in_nb.vid.value());
+                        eid_t e_id(v_id.value(), in_nb.vid.value());
                         if (lid > 0) {
                             label_t label = in_nb.label;
 
@@ -306,10 +307,10 @@ class TraversalExpert : public AbstractExpert {
 
                 if (dir != Direction_T::IN) {
                     vector<Nbs_pair> out_nbs;
-                    int sz = metadata_->GetOutNbs(tid, vtx, out_nbs);
+                    int sz = metadata_->GetOutNbs(tid, v_id, out_nbs);
                     for (auto & out_nb : out_nbs) {
                         // Get edge_id
-                        eid_t e_id(out_nb.vid.value(), vtx.id.value());
+                        eid_t e_id(out_nb.vid.value(), v_id.value());
                         if (lid > 0) {
                             label_t label = out_nb.label;
 

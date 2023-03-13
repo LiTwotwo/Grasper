@@ -8,7 +8,7 @@
 
 #pragma once
 #define TEST_WITH_COUNT
-// #define OP_BATCH
+#define OP_BATCH
 #define MTU 4096
 // #define DEBUG
 
@@ -38,6 +38,12 @@
 using __gnu_cxx::hash_map;
 using __gnu_cxx::hash_set;
 
+struct v_cache {
+    label_t label;
+    ptr_t in_nbs_ptr;
+    ptr_t out_nbs_ptr;
+};
+
 class MetaData {
  public:
     MetaData(Node & node, AbstractIdMapper * id_mapper, Buffer * buf);
@@ -63,6 +69,8 @@ class MetaData {
     void GetVertex(int tid, vid_t v_id, Vertex& v);
     void GetVertexBatch(int tid, vector<vid_t> v_ids, vector<Vertex>& v);
 
+    void BuildVertexIndex(vid_t v_id, Vertex& v);
+
     void GetAllVertices(int tid, vector<vid_t> & vid_list);
     void GetAllEdges(int tid, vector<eid_t> & eid_list);
 
@@ -70,8 +78,8 @@ class MetaData {
     bool GetPropertyForEdge(int tid, epid_t ep_id, value_t & val);
 
     // partial access remote
-    int GetInNbs(int tid, Vertex& v, vector<Nbs_pair>& in_nbs);
-    int GetOutNbs(int tid, Vertex& v, vector<Nbs_pair>& out_nbs);
+    int GetInNbs(int tid, vid_t v, vector<Nbs_pair>& in_nbs);
+    int GetOutNbs(int tid, vid_t v, vector<Nbs_pair>& out_nbs);
 
     // Not directly access remote
     bool GetLabelForVertex(int tid, vid_t vid, label_t & label);
@@ -132,6 +140,7 @@ class MetaData {
     std::map<label_t, vector<label_t>> edge_schemas;
 
  private:
+    std::unordered_map<uint32_t, v_cache> vertex_index;
     AbstractIdMapper* id_mapper_;
     Buffer* buffer_;
     Config* config_;
@@ -158,6 +167,7 @@ class MetaData {
     void RecordVout(int size); 
     void RecordVtxExt(int size);
     void RecordAccess(ACCESS_T type);
+    void PrintIndexMem();
 
     int vtx_counter_;
     vector<int> vtx_sizes_;

@@ -9,3 +9,5 @@ cmake/modules/zmq.cmake
 .vscode/
 test_data/
 *.log
+result.csv
+LDBC.txt

@@ -48,6 +48,14 @@ void MetaData::Init(vector<Node> & nodes, GraphMeta& graphmeta) {
 #endif
 }
 
+void MetaData::BuildVertexIndex(vid_t v_id, Vertex& v) {
+    if(vertex_index.find(v_id.value()) == vertex_index.end()) {
+        // TODO: code to limit size of vertex index
+        vertex_index[v_id.value()].label = v.label;
+        vertex_index[v_id.value()].in_nbs_ptr = v.ext_in_nbs_ptr;
+        vertex_index[v_id.value()].out_nbs_ptr = v.ext_out_nbs_ptr;
+    }
+}
 // index format
 // string \t index [int]
 /*
@@ -69,12 +77,13 @@ void MetaData::GetVertex(int tid, vid_t v_id, Vertex& v) {
 
     memcpy(&v, send_buf, sizeof(Vertex));
 
+    BuildVertexIndex(v_id, v);
+
     #ifdef TEST_WITH_COUNT
         // RecordVtx(sizeof(Vertex));
         RecordAccess(ACCESS_T::VTX);
     #endif // DEBUG
     return;
-
 }
 
 void MetaData::GetVertexBatch(int tid, vector<vid_t> v_ids, vector<Vertex>& vertice) {
@@ -96,6 +105,7 @@ void MetaData::GetVertexBatch(int tid, vector<vid_t> v_ids, vector<Vertex>& vert
             Vertex tmp;
             memcpy(&tmp, send_buf + i * sizeof(Vertex), sizeof(Vertex));
             vertice.emplace_back(tmp);
+            BuildVertexIndex(tmp.id, tmp);
         }
 
         remain -= len;
@@ -108,18 +118,30 @@ void MetaData::GetVertexBatch(int tid, vector<vid_t> v_ids, vector<Vertex>& vert
     return;
 }
 
-int MetaData::GetInNbs(int tid, Vertex& v, vector<Nbs_pair>& in_nbs) {
-    int size;
-    for(size = 0; size < IN_NBS; ++size) {
-        if(v.in_nbs[size].vid == 0) 
-            break; // TODO(big): check that no vid is 0
-        in_nbs.push_back(v.in_nbs[size]);
+int MetaData::GetInNbs(int tid, vid_t v, vector<Nbs_pair>& in_nbs) {
+    int size = 0;
+    Vertex tmpv;
+    auto res = vertex_index.find(v.value());
+    if(res == vertex_index.end()) {
+        GetVertex(tid, v, tmpv);
+
+        // NEW: store all nbs in ext
+        // for(size = 0; size < IN_NBS; ++size) {
+        //     if(tmpv.in_nbs[size].vid == 0)
+        //         break;
+        //     in_nbs.push_back(tmpv.in_nbs[size]);
+        // }
+    } 
+    else {
+        tmpv.ext_in_nbs_ptr = res->second.in_nbs_ptr; 
+        tmpv.ext_out_nbs_ptr = res->second.out_nbs_ptr; 
     }
-    if(v.ext_in_nbs_ptr.size != 0) {
+
+    if(tmpv.ext_in_nbs_ptr.size != 0) {
         // has ext in nbs
         char * send_buf = buffer_->GetSendBuf(tid);
-        uint64_t off = v_ext_off_ + v.ext_in_nbs_ptr.off;
-        uint64_t sz = v.ext_in_nbs_ptr.size;
+        uint64_t off = v_ext_off_ + tmpv.ext_in_nbs_ptr.off;
+        uint64_t sz = tmpv.ext_in_nbs_ptr.size;
         
         RDMA &rdma = RDMA::get_rdma();
         rdma.dev->RdmaRead(tid, REMOTE_NID, send_buf, sz, off);
@@ -146,18 +168,27 @@ int MetaData::GetInNbs(int tid, Vertex& v, vector<Nbs_pair>& in_nbs) {
     return size;
 };
 
-int MetaData::GetOutNbs(int tid, Vertex& v, vector<Nbs_pair>& out_nbs) {
-    int size;
-    for(size = 0; size < OUT_NBS; ++size) {
-        if(v.out_nbs[size].vid == 0) 
-            break; // TODO(big): check that no vid is 0
-        out_nbs.push_back(v.out_nbs[size]);
+int MetaData::GetOutNbs(int tid, vid_t v, vector<Nbs_pair>& out_nbs) {
+    int size = 0;
+    Vertex tmpv;
+    auto res = vertex_index.find(v.value());
+    if(res == vertex_index.end()) {
+        GetVertex(tid, v, tmpv);
+    // for(size = 0; size < OUT_NBS; ++size) {
+    //     if(v.out_nbs[size].vid == 0) 
+    //         break; // TODO(big): check that no vid is 0
+    //     out_nbs.push_back(v.out_nbs[size]);
+    // }
     }
-    if(v.ext_out_nbs_ptr.size != 0) {
+    else {
+        tmpv.ext_in_nbs_ptr = res->second.in_nbs_ptr;
+        tmpv.ext_out_nbs_ptr = res->second.out_nbs_ptr;
+    }
+    if(tmpv.ext_out_nbs_ptr.size != 0) {
         // has ext out nbs
         char * send_buf = buffer_->GetSendBuf(tid);
-        uint64_t off = v_ext_off_ + v.ext_out_nbs_ptr.off;
-        uint64_t sz = v.ext_out_nbs_ptr.size;
+        uint64_t off = v_ext_off_ + tmpv.ext_out_nbs_ptr.off;
+        uint64_t sz = tmpv.ext_out_nbs_ptr.size;
         
         RDMA &rdma = RDMA::get_rdma();
         rdma.dev->RdmaRead(tid, REMOTE_NID, send_buf, sz, off);
@@ -201,7 +232,8 @@ void MetaData::GetAllVertices(int tid, vector<vid_t> & vid_list) {
         Vertex* v = (Vertex *)send_buf;
 
         for(int i = 0; i < read_sz; ++i) {
-            vid_list.push_back(v[i].id);
+            BuildVertexIndex(v[i].id, v[i]);
+		    vid_list.push_back(v[i].id);
         }
 
         count += read_sz;
@@ -210,40 +242,20 @@ void MetaData::GetAllVertices(int tid, vector<vid_t> & vid_list) {
 
     #ifdef TEST_WITH_COUNT
         // RecordVtx(sizeof(Vertex)*v_num_);
+        PrintIndexMem();
     #endif
 }
 
 void MetaData::GetAllEdges(int tid, vector<eid_t> & eid_list) {
-    uint64_t buf_size = buffer_->GetSendBufSize();
-    int per_read_num = buf_size/sizeof(Vertex);
-    int count = 0;
-    int remain = v_num_;
-    while(remain > 0) {
-        int read_sz = remain > per_read_num ? per_read_num : remain;
-        
-        char* send_buf = buffer_->GetSendBuf(tid);
-        uint64_t off = v_array_off_ + count * sizeof(Vertex);
-        uint64_t size = read_sz * sizeof(Vertex);
-
-        RDMA &rdma = RDMA::get_rdma();
-        rdma.dev->RdmaRead(tid, REMOTE_NID, send_buf, size, off);
-        Vertex* v = (Vertex *)send_buf;
-
-        for(int i = 0; i < read_sz; ++i) {
-            vector<Nbs_pair> out_nbs;
-            int nbs_sz = GetOutNbs(tid, v[i], out_nbs);
-            for(int j = 0; j < nbs_sz; ++j) {
-                eid_list.push_back(eid_t(v[i].id.value(), out_nbs[j].vid.value()));                
-            }
+    for(auto it = vertex_index.begin(); it != vertex_index.end(); ++it) {
+        vid_t vid;
+        uint2vid_t(it->first,vid);
+        vector<Nbs_pair> out_nbs;
+        int nbs_sz = GetOutNbs(tid, vid, out_nbs);
+        for(int j = 0; j < nbs_sz; ++j) {
+            eid_list.push_back(eid_t(it->first, out_nbs[j].vid.value()));
         }
-
-        count += read_sz;
-        remain -= read_sz;
     }
-
-    #ifdef TEST_WITH_COUNT
-        // RecordVtx(sizeof(Vertex)*v_num_);
-    #endif
 }
 
 bool MetaData::VPKeyIsLocal(vpid_t vp_id) {
@@ -280,22 +292,25 @@ bool MetaData::GetPropertyForEdge(int tid, epid_t ep_id, value_t & val) {
 }
 
 bool MetaData::GetLabelForVertex(int tid, vid_t vid, label_t & label) {
-    // get label from struct vertex now
-    Vertex v;
-    GetVertex(tid, vid, v);
-    label = v.label;
+    auto res = vertex_index.find(vid.value());
+    if(res != vertex_index.end()) {
+        label = res->second.label;
+    }
+    else {
+        Vertex v;
+        GetVertex(tid, vid, v);
+        label = v.label;
+    }
+
     #ifdef TEST_WITH_COUNT
-        RecordAccess(ACCESS_T::VLABEL);
+        // RecordAccess(ACCESS_T::VLABEL);
     #endif // DEBUG
     return true;
 }
 
 bool MetaData::GetLabelForEdge(int tid, eid_t eid, label_t & label) {
-    // TODO(big) get all edge label from remote
-    Vertex v;
-    GetVertex(tid, eid.in_v, v);
     vector<Nbs_pair> out_nbs;
-    int nbs_sz = GetOutNbs(tid, v, out_nbs);
+    int nbs_sz = GetOutNbs(tid, eid.in_v, out_nbs);
     for(int i = 0; i < nbs_sz; ++i) {
         if(out_nbs[i].vid == eid.out_v) {
             label = out_nbs[i].label;
@@ -303,7 +318,7 @@ bool MetaData::GetLabelForEdge(int tid, eid_t eid, label_t & label) {
         }
     }
     #ifdef TEST_WITH_COUNT
-        RecordAccess(ACCESS_T::ELABEL);
+        // RecordAccess(ACCESS_T::ELABEL);
     #endif // DEBUG
     return true;
 }
@@ -569,7 +584,7 @@ void MetaData::get_schema() {
 void MetaData::GetVPList(label_t label, vector<label_t>& vp_list) {
     vp_list.insert(vp_list.begin(), vtx_schemas[label].begin(), vtx_schemas[label].end());
     #ifdef TEST_WITH_COUNT
-        RecordAccess(ACCESS_T::VPList);
+        // RecordAccess(ACCESS_T::VPList);
     #endif
     return;
 }
@@ -578,7 +593,7 @@ void MetaData::GetEPList(label_t label, vector<label_t>& ep_list) {
 
     ep_list.insert(ep_list.begin(), edge_schemas[label].begin(), edge_schemas[label].end());
     #ifdef TEST_WITH_COUNT
-        RecordAccess(ACCESS_T::EPList);
+        // RecordAccess(ACCESS_T::EPList);
     #endif
     return;
 }
@@ -674,6 +689,11 @@ void MetaData::RecordAccess(ACCESS_T type) {
         if(access_list_.back() != type)
             access_list_.push_back(type);
     }
+}
+void MetaData::PrintIndexMem() {
+    size_t total = sizeof(vertex_index) + vertex_index.size() *(sizeof(decltype(vertex_index)::key_type) + sizeof(decltype(vertex_index)::value_type));
+    std::cout << "sizeof integer = " << sizeof(int) << endl;
+    std::cout << "Vertex Index size = " << total << endl;
 }
 
 void MetaData::PrintCounter() {
