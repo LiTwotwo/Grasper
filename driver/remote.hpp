@@ -43,7 +43,6 @@ class Remote {
     Remote(Node my_node, vector<Node> & local_servers): my_node_(my_node), local_servers_(local_servers) {
         config_ = Config::GetInstance();
         sender_ = NULL;
-        
         m_context_ = NULL;
         m_pd_ = NULL;
         m_cm_channel_ = NULL;
@@ -55,6 +54,8 @@ class Remote {
     }
 
     ~Remote() {
+        running_ = false;
+        pthread_join(handler_tid_, NULL);
         delete sender_;   
     }
 
@@ -144,6 +145,29 @@ class Remote {
             rdma_ctrl_->register_memory(REMOTE_MR_ID, buf->GetBuf(), buf->GetRemoteBufSize(), rdma_ctrl_->get_device()) == true
         );            
     }
+
+    void * graphMetaConnection() {
+        pthread_detach(pthread_self());
+        
+        ibinstream m;
+        m << data_store_->GetGraphMeta();
+
+        while(running_) {
+            size_t metasize = m.size();
+            zmq::message_t msg(&metasize, sizeof(size_t));
+            sender_->send(msg);
+
+            zmq::message_t metamsg(metasize);
+            memcpy((void*)metamsg.data(), m.get_buf(), metasize);
+            sender_->send(metamsg);
+            break; // no need to polling
+        }
+        return NULL;
+    }
+
+    static void * graphMetaConnection_helper(void *context) {
+        return ((Remote *)context)->graphMetaConnection();
+    }
     
     void Start() {
         m_stop_  = false;
@@ -190,18 +214,10 @@ class Remote {
         // datastore->WriteSnapshot();
 
         // fflush(stdout);
-        
-        // Send graphmeta
-        ibinstream m;
-        m << data_store_->GetGraphMeta();
-
-        size_t metasize = m.size();
-        zmq::message_t msg(&metasize, sizeof(size_t));
-        sender_->send(msg);
-
-        zmq::message_t metamsg(metasize);
-        memcpy((void*)metamsg.data(), m.get_buf(), metasize);
-        sender_->send(metamsg);           
+        pthread_attr_t attr;
+        pthread_attr_init(&attr);
+        pthread_create(&handler_tid_, &attr, Remote::graphMetaConnection_helper, this);
+       
         
         cout << "Remote Server Are All Ready ..." << endl;
     }
@@ -213,18 +229,19 @@ class Remote {
     printf(
         "Server now runs as a disaggregated mode. No CPU involvement during RDMA-based transaction processing\n"
         "Type c to run another round, type q if you want to exit :)\n");
-    while (true) {
-        // char ch;
-        // scanf("%c", &ch);
-        // if (ch == 'q') {
-        //     return false;
-        // } else if (ch == 'c') {
-        //     return true;
-        // } else {
-        //     printf("Type c to run another round, type q if you want to exit :)\n");
-        // }
+    while (running_) {
+        char ch;
+        while(scanf("%c", &ch) == 0);
+        if (ch == 'q') {
+            return false;
+        } else if (ch == 'c') {
+            return true;
+        } else {
+            printf("Type c to run another round, type q if you want to exit :)\n");
+        }
             usleep(2000);
         }
+        return false;
     }
 
  private:
@@ -249,6 +266,9 @@ class Remote {
     zmq::context_t context_;
     // use tcp to send metadata to compute servers
     zmq::socket_t * sender_; 
+    pthread_t handler_tid_;
+
+    bool running_ = true;
 
     std::unique_ptr<RemoteBuffer> buf_;
     std::unique_ptr<DataStore> data_store_;

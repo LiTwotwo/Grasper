@@ -11,3 +11,4 @@ test_data/
 *.log
 result.csv
 LDBC.txt
+stat

@@ -47,13 +47,12 @@ int main(int argc, char* argv[]) {
 
     Remote remote(my_node, nodes);
     remote.Init();
-
     remote.Start();
-
     remote.Run();
 
-    // node_barrier();
-    // node_finalize();
+    auto pid = getpid();
+    string cp_cmd = "cp /proc/" + to_string(pid) + "/stat ./";
+    system(cp_cmd.c_str());   
 
     return 0;
 }

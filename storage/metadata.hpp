@@ -11,6 +11,7 @@
 #define OP_BATCH
 #define MTU 4096
 // #define DEBUG
+#define PRINT_MEM_USAGE
 
 #include <mutex>
 #include <string>

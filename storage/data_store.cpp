@@ -16,6 +16,10 @@ DataStore::DataStore(Node & node, AbstractIdMapper * id_mapper, RemoteBuffer * b
 }
 
 DataStore::~DataStore() {
+    #ifdef PRINT_MEM_USAGE
+        vpstore_->print_mem_usage();
+        epstore_->print_mem_usage();
+    #endif
     delete v_table_;
     delete vpstore_;
     delete epstore_;
