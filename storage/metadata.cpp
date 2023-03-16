@@ -10,7 +10,7 @@
 #include "storage/mpi_snapshot.hpp"
 #include "storage/snapshot_func.hpp"
 
-MetaData::MetaData(Node & node, AbstractIdMapper * id_mapper, Buffer * buf): node_(node), id_mapper_(id_mapper), buffer_(buf) {
+MetaData::MetaData(Node & node, vector<Node> & remotes, AbstractIdMapper * id_mapper, Buffer * buf): node_(node), remotes_(remotes), id_mapper_(id_mapper), buffer_(buf) {
     // TODO(big) new MetaData both in remote and local server
     config_ = Config::GetInstance();
     vpstore_ = NULL;
@@ -26,17 +26,17 @@ MetaData::~MetaData() {
     #endif // DEBUG
 }
 
-void MetaData::Init(vector<Node> & nodes, GraphMeta& graphmeta) {
+void MetaData::Init(GraphMeta& graphmeta) {
     // TODO(big) init vkv ekv vtable etable in remote and local 
     // TODO(big) get v/e meta from remote
     v_array_off_ = graphmeta.v_array_off;
     v_ext_off_ = graphmeta.v_ext_off;
     v_num_ = graphmeta.v_num;
     
-    vpstore_ = new VKVStore_Local(buffer_);
-    epstore_ = new EKVStore_Local(buffer_);
-    vpstore_->init(nodes, graphmeta.vp_off, graphmeta.vp_num_slots, graphmeta.vp_num_buckets);
-    epstore_->init(nodes, graphmeta.ep_off, graphmeta.ep_num_slots, graphmeta.ep_num_buckets);
+    vpstore_ = new VKVStore_Local(node_, remotes_, buffer_);
+    epstore_ = new EKVStore_Local(node_, remotes_, buffer_);
+    vpstore_->init(graphmeta.vp_off, graphmeta.vp_num_slots, graphmeta.vp_num_buckets);
+    epstore_->init(graphmeta.ep_off, graphmeta.ep_num_slots, graphmeta.ep_num_buckets);
 
 #ifdef TEST_WITH_COUNT
     InitCounter();

@@ -34,7 +34,7 @@ Authors: Hongzhi Chen (hzchen@cse.cuhk.edu.hk)
 
 class Worker {
  public:
-    Worker(Node & my_node, vector<Node> & workers, Node & remote): my_node_(my_node), workers_(workers), remote_(remote) {
+    Worker(Node & my_node, vector<Node> & workers, vector<Node> & remotes): my_node_(my_node), workers_(workers), remotes_(remotes) {
         config_ = Config::GetInstance();
         num_query = 0;
         is_emu_mode_ = false;
@@ -89,7 +89,7 @@ class Worker {
         // Attention: bind a new tcp port different from RDMA use TCP to receive from client
         sprintf(addr, "tcp://*:%d", my_node_.tcp_port + 1);
         // sprintf(w_addr, "tcp://*:%d", my_node_.tcp_port + config_->global_num_threads + 1);
-        sprintf(r_addr, "tcp://%s:%d", remote_.hostname.c_str(), remote_.tcp_port + 1); // LCY: now remote config will be add at the end of ib.cfg
+        sprintf(r_addr, "tcp://%s:%d", remotes_[0].hostname.c_str(), remotes_[0].tcp_port + 1); // LCY: now remote config will be add at the end of ib.cfg
 
         // TODO: change to connect addr here, what's the difference?
         receiver_->bind(addr);
@@ -381,26 +381,10 @@ class Worker {
         buf_ = new Buffer(my_node_);
         cout << "Worker" << my_node_.get_local_rank() << ": DONE -> Register LOCAL MEM, SIZE = " << buf_->GetLocalBufSize() << endl;
         
-        // if (config_->global_use_rdma)
-        //     cout << "Worker" << my_node_.get_local_rank() << ": DONE -> Register RDMA MEM, SIZE = " << buf->GetBufSize() << endl;
-        // else
-        //     cout << "Worker" << my_node_.get_local_rank() << ": DONE -> Register MEM for KVS, SIZE = " << buf->GetBufSize() << endl;
-
         mailbox_ = new RdmaMailbox(my_node_, buf_);
-        mailbox_->Init(workers_, remote_);
+        mailbox_->Init(workers_, remotes_[0]);
         cout << "Worker" << my_node_.get_local_rank() << ": DONE -> Mailbox->Init()" << endl;
 
-        // recv meta from remote server
-        // char helloreq[] = "[From Compute]: request graphmeta";
-        // zmq::message_t msg(strlen(helloreq) + 1);
-        // memcpy((void*)msg.data(), helloreq, strlen(helloreq) + 1);
-
-        // remote_listener_->send(msg);
-        // cout << "Send request from Compute server : " << helloreq << endl;
-        // zmq::message_t meta(sizeof(GraphMeta));
-        // remote_listener_->recv(&meta);
-
-        // while(remote_listener_->recv(&meta) != 0); // LCY: need block to recv meta
         size_t meta_size;
         zmq::message_t szmsg(sizeof(size_t));
         remote_listener_->recv(&szmsg);
@@ -413,10 +397,10 @@ class Worker {
         m.assign((char *)metamsg.data(), meta_size, 0);
         m >> graphmeta;    
         cout << "Worker" << my_node_.get_local_rank()  << ": DONE -> Receive metadata" << endl;
-        cout << graphmeta.DebugString();
-        metadata_ = new MetaData(my_node_, &id_mapper, buf_);
+        
+        metadata_ = new MetaData(my_node_, remotes_, &id_mapper, buf_);
         MetaData::StaticInstanceP(metadata_);
-        metadata_->Init(workers_, graphmeta);
+        metadata_->Init(graphmeta);
 
         metadata_->get_string_indexes();
         worker_barrier(my_node_);
@@ -497,7 +481,8 @@ class Worker {
  private:
     Node & my_node_;
     vector<Node> & workers_;
-    Node & remote_;
+    vector<Node> & remotes_;
+    
     Config * config_;
     Parser* parser_;
     IndexStore* index_store_;

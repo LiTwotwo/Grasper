@@ -17,7 +17,6 @@ int main(int argc, char* argv[]) {
 
     Node my_node;
     InitMPIComm(&argc, &argv, my_node);
-    std::cout << "Init success" << std::endl;
 
     string cfg_fname = argv[1];
     CHECK(!cfg_fname.empty());
@@ -32,7 +31,8 @@ int main(int argc, char* argv[]) {
     my_node.hostname = node.hostname;
     std::cout << my_node.DebugString();
     nodes.erase(nodes.begin());  // delete the master info in nodes (array) for rdma init
-    Node remote = nodes.back();
+    vector<Node> remotes;
+    remotes.push_back(nodes.back()); // ATTENTION: current default only ONE remote node
     nodes.pop_back();
 
     // set my_node as the shared static Node instance
@@ -52,26 +52,13 @@ int main(int argc, char* argv[]) {
 
         master.Start();
     } else {
-        Worker worker(my_node, nodes, remote);
+        Worker worker(my_node, nodes, remotes);
         worker.Init();
         worker.Start();
 
         worker_barrier(my_node);
         worker_finalize(my_node);
     }
-    // if (my_node.get_world_rank() == MASTER_RANK) {
-    //     Worker worker(my_node, nodes, remote);
-    //     worker.Init();
-    //     worker.Start();
-
-    //     worker_barrier(my_node);
-    //     worker_finalize(my_node);
-    // } else {
-    //     Master master(my_node);
-    //     master.Init();
-
-    //     master.Start();
-    // }
 
     node_barrier();
     node_finalize();
