@@ -7,7 +7,6 @@ add_library(all-deps STATIC
   $<TARGET_OBJECTS:utils-objs>
   $<TARGET_OBJECTS:base-objs>
   $<TARGET_OBJECTS:rlib>
-  $<TARGET_OBJECTS:eRPC>
   )
 
 add_executable(remote remote.cpp)
