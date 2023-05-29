@@ -17,7 +17,7 @@ SET(TBB_NAME tbb)
 
 FIND_LIBRARY(TBB_LIBRARIES
     NAMES ${TBB_NAME}
-    PATHS ${TBB_ROOT}/build/linux_intel64_gcc_cc5.2.0_libc_kernel2.6.32_release
+    PATHS ${TBB_ROOT}/lib/x86_64-linux-gnu/
     NO_DEFAULT_PATH
 )
 

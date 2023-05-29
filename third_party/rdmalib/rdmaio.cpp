@@ -23,7 +23,7 @@
 namespace rdmaio {
 
 // extern __thread RdmaDevice **rdma_devices_;
-int tcp_base_port;
+std::vector<int> tcp_base_ports;
 int num_rc_qps;
 int num_uc_qps;
 int num_ud_qps;
@@ -49,7 +49,7 @@ bool Qp::get_ud_connect_info(int remote_id, int idx) {
     uint64_t qid = _QP_ENCODE_ID(tid + UD_ID_BASE, UD_ID_BASE + idx);
 
     char address[30];
-    snprintf(address, 30, "tcp://%s:%d", network[remote_id].c_str(), tcp_base_port);
+    snprintf(address, 30, "tcp://%s:%d", network[remote_id].c_str(), tcp_base_ports[remote_id]);
 
     // prepare tcp connection
     zmq::socket_t socket(context, ZMQ_REQ);
@@ -87,7 +87,7 @@ bool Qp::get_ud_connect_info(int remote_id, int idx) {
 
     int dlid = qp_attr.lid;
 
-    ahs_[remote_id] = RdmaCtrl::create_ah(dlid, port_idx, dev_);
+    ahs_[remote_id] = RdmaCtrl::create_ah(dlid, port_idx, dev_, qp_attr.addr);
     memcpy(&(ud_attrs_[remote_id]), (char *)reply.data() + 1, sizeof(RdmaQpAttr));
 
     return true;
@@ -103,7 +103,7 @@ bool Qp::get_ud_connect_info_specific(int remote_id, int thread_id, int idx) {
     uint64_t qid = _QP_ENCODE_ID(thread_id + UD_ID_BASE, UD_ID_BASE + idx);
 
     char address[30];
-    snprintf(address, 30, "tcp://%s:%d", network[remote_id].c_str(), tcp_base_port);
+    snprintf(address, 30, "tcp://%s:%d", network[remote_id].c_str(), tcp_base_ports[remote_id]);
 
     // prepare tcp connection
     zmq::socket_t socket(context, ZMQ_REQ);
@@ -141,7 +141,7 @@ bool Qp::get_ud_connect_info_specific(int remote_id, int thread_id, int idx) {
 
     int dlid = qp_attr.lid;
 
-    ahs_.insert(std::make_pair(key, RdmaCtrl::create_ah(dlid, port_idx, dev_)));
+    ahs_.insert(std::make_pair(key, RdmaCtrl::create_ah(dlid, port_idx, dev_, qp_attr.addr)));
     ud_attrs_.insert(std::make_pair(key, RdmaQpAttr()));
     memcpy(&(ud_attrs_[key]), (char *)reply.data() + 1, sizeof(RdmaQpAttr));
 
@@ -169,7 +169,7 @@ void rc_ready2init(ibv_qp * qp, int port_id) {
     CE_1(rc, "[librdma] qp: Failed to modify RC to INIT state, %s\n", strerror(errno));
 }
 
-void rc_init2rtr(ibv_qp * qp, int port_id, int qpn, int dlid) {
+void rc_init2rtr(ibv_qp * qp, int port_id, int qpn, int dlid, uint64_t subnet_prefix, uint64_t interface_id) {
     int rc, flags;
     struct ibv_qp_attr qp_attr;
     memset(&qp_attr, 0, sizeof(struct ibv_qp_attr));
@@ -180,11 +180,17 @@ void rc_init2rtr(ibv_qp * qp, int port_id, int qpn, int dlid) {
     qp_attr.max_dest_rd_atomic = 16;
     qp_attr.min_rnr_timer = 12;
 
-    qp_attr.ah_attr.is_global = 0;
     qp_attr.ah_attr.dlid = dlid;
     qp_attr.ah_attr.sl = 0;
     qp_attr.ah_attr.src_path_bits = 0;
     qp_attr.ah_attr.port_num = port_id; /* Local port! */
+
+    qp_attr.ah_attr.is_global = 1;
+    qp_attr.ah_attr.grh.dgid.global.subnet_prefix = subnet_prefix;
+    qp_attr.ah_attr.grh.dgid.global.interface_id = interface_id;
+    qp_attr.ah_attr.grh.sgid_index = 0;
+    qp_attr.ah_attr.grh.flow_label = 0;
+    qp_attr.ah_attr.grh.hop_limit = 255;
 
     flags = IBV_QP_STATE | IBV_QP_AV | IBV_QP_PATH_MTU | IBV_QP_DEST_QPN | IBV_QP_RQ_PSN
             | IBV_QP_MAX_DEST_RD_ATOMIC | IBV_QP_MIN_RNR_TIMER;
@@ -233,7 +239,6 @@ void uc_init2rtr(ibv_qp * qp, int port_id, int qpn, int dlid) {
     qp_attr.dest_qp_num = qpn;
     qp_attr.rq_psn = DEFAULT_PSN;
 
-    qp_attr.ah_attr.is_global = 0;
     qp_attr.ah_attr.dlid = dlid;
     qp_attr.ah_attr.sl = 0;
     qp_attr.ah_attr.src_path_bits = 0;

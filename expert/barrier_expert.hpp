@@ -25,9 +25,9 @@ struct barrier_data_base {
 template<class T = BarrierData::barrier_data_base>
 class BarrierExpertBase :  public AbstractExpert {
     static_assert(std::is_base_of<BarrierData::barrier_data_base, T>::value, "T must derive from barrier_data_base");
+public:
     using BarrierDataTable = tbb::concurrent_hash_map<mkey_t, T, MkeyHashCompare>;
 
- public:
     BarrierExpertBase(int id, DataStore* data_store, CoreAffinity* core_affinity) : AbstractExpert(id, data_store, core_affinity) {}
 
     void process(const vector<Expert_Object> & experts, Message & msg) {

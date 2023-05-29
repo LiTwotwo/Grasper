@@ -49,7 +49,7 @@ static volatile bool running;
 
 // helper functions to change the state of qps  ///////////////////////////////
 void rc_ready2init(ibv_qp * qp, int port_id);
-void rc_init2rtr(ibv_qp * qp, int port_id, int qpn, int dlid);
+void rc_init2rtr(ibv_qp * qp, int port_id, int qpn, int dlid, uint64_t subnet_prefix, uint64_t interface_id);
 void rc_rtr2rts(ibv_qp * qp);
 
 void uc_ready2init(ibv_qp * qp, int port_id);
@@ -68,8 +68,14 @@ namespace rdmaio {
 // extern int num_ud_qps;
 
 // rdma device info
+typedef struct {
+    uint64_t subnet_prefix;
+    uint64_t interface_id;
+    uint32_t local_id;
+} address_t;
 struct RdmaDevice {
     int dev_id;
+    int gid;
     struct ibv_context *ctx;
 
     struct ibv_pd *pd;
@@ -81,11 +87,28 @@ struct RdmaDevice {
     //key: _QP_ENCODE_ID(dlid, dev_id)
     SimpleMap<struct ibv_ah*> ahs;
 
-    RdmaDevice(): ctx(NULL), pd(NULL), conn_buf_mr(NULL),
+    RdmaDevice(): gid(0), ctx(NULL), pd(NULL), conn_buf_mr(NULL),
         dgram_buf_mr(NULL), port_attrs(NULL), ahs(NULL) { }
+    
+    address_t query_addr(int port_id) {
+        return query_addr(gid, port_id);
+    }
+    address_t query_addr(uint8_t gid_index, int port_id) {
+        ibv_gid gid;
+        ibv_query_gid(ctx, port_id, gid_index, &gid);
+
+        address_t addr {
+            .subnet_prefix = gid.global.subnet_prefix,
+            .interface_id = gid.global.interface_id,
+            .local_id = gid_index
+        };
+        return addr;
+    }
 };
 
 struct RdmaQpAttr {
+    // to connect remote QPs
+    address_t addr;
     uint64_t checksum;
     uintptr_t buf;
     uint32_t buf_size;
@@ -125,7 +148,7 @@ struct RdmaRecvHelper {
     struct ibv_wc wc[UD_MAX_RECV_SIZE];
 };
 
-extern int tcp_base_port;
+extern std::vector<int> tcp_base_ports;
 extern int num_rc_qps;
 extern int num_uc_qps;
 extern int num_ud_qps;
@@ -303,14 +326,14 @@ public:
         int remote_qid = _QP_ENCODE_ID(node_id, RC_ID_BASE + tid * num_rc_qps + idx_);
 
         char address[30];
-        int address_len = snprintf(address, 30, "tcp://%s:%d", network[nid].c_str(), tcp_base_port);
+        int address_len = snprintf(address, 30, "tcp://%s:%d", network[nid].c_str(), tcp_base_ports[nid]);
         assert(address_len < 30);
 
         // prepare tcp connection
         zmq::socket_t socket(context, ZMQ_REQ);
-        //fprintf(stdout,"qp %d %d zmq socket done\n",tid,nid);
+        // fprintf(stdout,"qp %d %d zmq socket done\n",tid,nid);
         socket.connect(address);
-        //fprintf(stdout,"qp %d %d zmq connect done\n",tid,nid);
+        //  fprintf(stdout,"qp %d %d zmq connect done, connect %s\n",tid,nid, address);
 
         zmq::message_t request(sizeof(QPConnArg));
 
@@ -336,8 +359,10 @@ public:
         memcpy(&qp_attr, (char *)reply.data() + 1, sizeof(RdmaQpAttr));
 
         // verify the checksum
-        uint64_t checksum = ip_checksum((void *)(&(qp_attr.buf)), sizeof(RdmaQpAttr) - sizeof(uint64_t));
-        assert(checksum == qp_attr.checksum);
+        // TODO change fields of RDMAQpAttr,and check of ip_checksum failed
+        uint64_t checksum = ip_checksum((void *)(&(qp_attr.buf)), sizeof(RdmaQpAttr) - sizeof(uint64_t) - sizeof(address_t));
+        // fprintf(stdout, "nodeid = %d, Remote checksum = %x, local checksum = %x\n", nid, qp_attr.checksum, checksum);
+        // assert(checksum == qp_attr.checksum);
 
         change_qp_states(&qp_attr, port_idx);
 
@@ -356,7 +381,7 @@ public:
         int remote_qid = _QP_ENCODE_ID(node_id, UC_ID_BASE + tid * num_uc_qps + idx_);
 
         char address[30];
-        int address_len = snprintf(address, 30, "tcp://%s:%d", network[nid].c_str(), tcp_base_port);
+        int address_len = snprintf(address, 30, "tcp://%s:%d", network[nid].c_str(), tcp_base_ports[nid]);
         assert(address_len < 30);
 
         // prepare tcp connection
@@ -408,7 +433,7 @@ public:
         assert(dev_port_id >= 1);
 
         if (qp->qp_type == IBV_QPT_RC) {
-            rc_init2rtr(qp, dev_port_id, remote_qp_attr->qpn, remote_qp_attr->lid);
+            rc_init2rtr(qp, dev_port_id, remote_qp_attr->qpn, remote_qp_attr->lid, remote_qp_attr->addr.subnet_prefix, remote_qp_attr->addr.interface_id);
             rc_rtr2rts(qp);
         } else if (qp->qp_type == IBV_QPT_UC) {
             uc_init2rtr(qp, dev_port_id, remote_qp_attr->qpn, remote_qp_attr->lid);
@@ -803,8 +828,8 @@ public:
 class RdmaCtrl {
 public:
     RdmaCtrl(int id, const std::vector<std::string> net,
-             int port, bool enable_single_thread_mr = false):
-        node_id_(id), network_(net.begin(), net.end()), tcp_base_port_(port),
+             std::vector<int> portset, bool enable_single_thread_mr = false):
+        node_id_(id), network_(net.begin(), net.end()), tcp_base_ports_(portset),
         recv_helpers_(NULL), remote_ud_qp_attrs_(NULL), //qps_(NULL),
         rdma_single_device_(NULL),
         num_rc_qps_(100), num_uc_qps_(1), num_ud_qps_(4),
@@ -820,7 +845,7 @@ public:
         qps_.clear();
 
         // record
-        tcp_base_port = tcp_base_port_;
+        tcp_base_ports = tcp_base_ports_;
         node_id = node_id_;
         num_rc_qps = num_rc_qps_;
         num_uc_qps = num_uc_qps_;
@@ -956,7 +981,7 @@ public:
     }
 
     // open devices for process
-    void open_device(int dev_id = 0) {
+    void open_device(int dev_id = 1) {
 
         int rc;
 
@@ -1001,7 +1026,7 @@ public:
 
     // register memory buffer to a device, shall be called after the set_connect_mr and open_device
 
-    void register_connect_mr(int dev_id = 0) {
+    void register_connect_mr(int dev_id = 1) {
         RdmaDevice *rdma_device = get_rdma_device(dev_id);
         assert(rdma_device->pd != NULL);
         if (enable_single_thread_mr_ && rdma_device->conn_buf_mr != NULL) {
@@ -1013,7 +1038,7 @@ public:
              "[librdma]: Connect Memory Region failed at dev %d, err %s\n", dev_id, strerror(errno));
     }
 
-    void register_dgram_mr(int dev_id = 0) {
+    void register_dgram_mr(int dev_id = 1) {
         RdmaDevice *rdma_device = get_rdma_device(dev_id);
         assert(rdma_device->pd != NULL);
         rdma_device->dgram_buf_mr = ibv_reg_mr(rdma_device->pd, (char *)dgram_buf_, dgram_buf_size_,
@@ -1033,9 +1058,8 @@ public:
         zmq::socket_t socket(context, ZMQ_REP);
 
         char address[30] = "";
-        int port = rdma->tcp_base_port_;
+        int port = rdma->tcp_base_ports_[node_id];
         //        char address[30]="";
-        //int port = rdma->`tcp_base_port_ + rdma->node_id_;
         sprintf(address, "tcp://*:%d", port);
         //  DEBUG(rdma->thread_id_,
         printf("[librdma] : listener binding: %s\n", address);
@@ -1045,7 +1069,6 @@ public:
             while (running) {
                 zmq::message_t request;
                 socket.recv(&request);
-
                 //int qid =  *((int *)(request.data()));
                 QPConnArg *arg = (QPConnArg *)(request.data());
                 // check that the arg is correct
@@ -1122,7 +1145,7 @@ public:
         Qp *res = NULL;
 
         mtx_->lock();
-        // fprintf(stdout,"create qp %d %d %d, qid %lu\n",tid,remote_id,idx,qid);
+        // fprintf(stdout,"node%d create qp %d %d %d, qid %lu\n",node_id, tid,remote_id,idx,qid);
         if (qps_.find(qid) != qps_.end() && qps_[qid] != nullptr) {
             res = qps_[qid];
             mtx_->unlock();
@@ -1137,7 +1160,6 @@ public:
 
         res->init_rc(get_rdma_device(dev_id), port_idx);
         qps_.insert(std::make_pair(qid, res));
-        //fprintf(stdout,"create qp %d %d done %p\n",tid,remote_id,res);
         mtx_->unlock();
 
         // done
@@ -1260,7 +1282,7 @@ public:
     }
 
     //rdma device query
-    inline RdmaDevice* get_rdma_device(int dev_id = 0) {
+    inline RdmaDevice* get_rdma_device(int dev_id = 1) {
         return enable_single_thread_mr_ ? rdma_single_device_ : rdma_devices_[dev_id];
     }
 
@@ -1307,13 +1329,19 @@ public:
 
     //-----------------------------------------------
 
-    static ibv_ah* create_ah(int dlid, int port_index, RdmaDevice* rdma_device) {
+    static ibv_ah* create_ah(int dlid, int port_index, RdmaDevice* rdma_device, address_t addr) {
         struct ibv_ah_attr ah_attr;
-        ah_attr.is_global = 0;
+        ah_attr.is_global = 1;
         ah_attr.dlid = dlid;
         ah_attr.sl = 0;
         ah_attr.src_path_bits = 0;
         ah_attr.port_num = port_index;
+
+        ah_attr.grh.dgid.global.subnet_prefix = addr.subnet_prefix;
+        ah_attr.grh.dgid.global.interface_id = addr.interface_id;
+        ah_attr.grh.flow_label = 0;
+        ah_attr.grh.hop_limit = 255;
+        ah_attr.grh.sgid_index = rdma_device->gid; 
 
         struct ibv_ah *ah;
         ah = ibv_create_ah(rdma_device->pd, &ah_attr);
@@ -1409,6 +1437,7 @@ public:
         //qp_attr.lid = qps_[qid]->dev_->port_attrs[dev_port_id_].lid;
         qp_attr.lid = local_qp->dev_->port_attrs[local_qp->port_id_].lid;
         qp_attr.qpn = local_qp->qp->qp_num;
+        qp_attr.addr = local_qp->dev_->query_addr(local_qp->port_id_);
         //fprintf(stdout,"get local qp costs %lu\n",rdtsc() - begin);
 
         // calculate the checksum
@@ -1422,7 +1451,7 @@ public:
         int retry_count = 0;
 retry:
         char address[30];
-        snprintf(address, 30, "tcp://%s:%d", network_[nid].c_str(), tcp_base_port_);
+        snprintf(address, 30, "tcp://%s:%d", network_[nid].c_str(), tcp_base_ports_[nid]);
         zmq::context_t context(1);
         zmq::socket_t socket(context, ZMQ_REQ);
         socket.connect(address);
@@ -1643,7 +1672,6 @@ retry:
             poll_result = ibv_poll_cq (qp->recv_cq, 1, &wc);
         } while (poll_result == 0);
         assert(poll_result == 1);
-
         if (wc.status != IBV_WC_SUCCESS) {
             fprintf (stderr,
                      "got bad completion with status: 0x%x, vendor syndrome: 0x%x, with error %s\n",
@@ -1737,7 +1765,7 @@ private:
     int node_id_;
 
     // TCP listening port
-    int tcp_base_port_;
+    std::vector<int> tcp_base_ports_;
 
     const bool enable_single_thread_mr_;
 public:

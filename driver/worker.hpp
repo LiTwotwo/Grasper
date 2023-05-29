@@ -375,9 +375,9 @@ class Worker {
         MPISnapshot* snapshot = MPISnapshot::GetInstance(config_->SNAPSHOT_PATH);
 
         // you can use this if you want to overwrite snapshot
-        // snapshot->DisableRead();
+        snapshot->DisableRead();
         // you can use this if you are testing on a tiny dataset to avoid write snapshot
-        // snapshot->DisableWrite();
+        snapshot->DisableWrite();
 
         // ===================prepare stage=================
         NaiveIdMapper * id_mapper = new NaiveIdMapper(my_node_);
@@ -444,7 +444,9 @@ class Worker {
         worker_barrier(my_node_);
 
         // expert driver starts
+        cout << "Worker" << my_node_.get_local_rank() << ": START -> ExpertAdapter" << endl;
         ExpertAdapter * expert_adapter = new ExpertAdapter(my_node_, rc_, mailbox, datastore, core_affinity, index_store_);
+        cout << "Worker" << my_node_.get_local_rank() << ": NEW -> ExpertAdapter" << endl;
         expert_adapter->Start();
         cout << "Worker" << my_node_.get_local_rank() << ": DONE -> expert_adapter->Start()" << endl;
         worker_barrier(my_node_);
@@ -452,7 +454,7 @@ class Worker {
 
         fflush(stdout);
         worker_barrier(my_node_);
-        if (my_node_.get_world_rank() == MASTER_RANK) cout << "Grasper Servers Are All Ready ..." << endl;
+        if (my_node_.get_local_rank() == MASTER_RANK) cout << "Grasper Servers Are All Ready ..." << endl;
 
 
         // pop out the query result from collector

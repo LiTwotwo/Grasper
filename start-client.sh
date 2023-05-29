@@ -1,2 +1,2 @@
 #$1 ib_conf
-./release/client $1
+./debug/client $1

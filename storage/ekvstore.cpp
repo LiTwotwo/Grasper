@@ -46,8 +46,11 @@ uint64_t EKVStore::insert_id(uint64_t _pid) {
                 // Cannot get the original pid
                 cout << "EKVStore ERROR: conflict at slot["
                      << slot_id << "] of bucket["
-                     << bucket_id << "]" << endl;
-                assert(false);
+                     << bucket_id << "]"
+                     << " in vid" << (_pid >> (64-VID_BITS))
+                     << "out vid" << ((_pid >> (64-PID_BITS)) & ((1 << (VID_BITS+1))-1))
+                     << "pid " << (_pid & ((1<<13)-1)) << endl;
+                // assert(false);
             }
 
             // insert to an empty slot

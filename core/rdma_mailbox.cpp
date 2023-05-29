@@ -81,7 +81,7 @@ int RdmaMailbox::Send(int tid, const Message & msg) {
     }
 }
 
-bool RdmaMailbox::SendData(int tid, const mailbox_data_t& data) {
+bool RdmaMailbox::SendData(int tid, mailbox_data_t& data) {
     // Send data to remote machine only
     int dst_nid = data.dst_nid;
     int dst_tid = data.dst_tid;

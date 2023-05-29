@@ -11,7 +11,7 @@ Authors: Hongzhi Chen (hzchen@cse.cuhk.edu.hk)
 
 #include <mpi.h>
 #include <omp.h>
-
+#include <assert.h>
 #include "base/serialization.hpp"
 
 using namespace std;

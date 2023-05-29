@@ -18,7 +18,7 @@ SET(ZMQ_NAME zmq)
 
 FIND_LIBRARY(ZMQ_LIBRARIES
     NAMES ${ZMQ_NAME}
-    PATHS ${ZMQ_ROOT}/lib
+    PATHS ${ZMQ_ROOT}/lib/x86_64-linux-gnu/
     NO_DEFAULT_PATH
 )
 

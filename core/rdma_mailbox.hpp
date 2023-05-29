@@ -75,7 +75,7 @@ class RdmaMailbox : public AbstractMailbox {
     bool CheckRecvBuf(int tid, int nid);
     void FetchMsgFromRecvBuf(int tid, int nid, obinstream & um);
     bool IsBufferFull(int dst_nid, int dst_tid, uint64_t tail, uint64_t msg_sz);
-    bool SendData(int tid, const mailbox_data_t& data);
+    bool SendData(int tid, mailbox_data_t& data);
 
     inline int GetIndex(int tid, int nid) {
         nid = nid < node_.get_local_rank() ? nid : nid - 1;

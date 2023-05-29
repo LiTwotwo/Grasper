@@ -52,13 +52,16 @@ class RDMA {
         RDMA_Device(int num_nodes, int num_threads, int nid, char *mem, uint64_t mem_sz, vector<Node> & nodes) : num_threads_(num_threads) {
             // record IPs of ndoes
             vector<string> ipset;
-            for (const auto & node : nodes)
+            vector<int> portset;
+            for (const auto & node : nodes) {
                 ipset.push_back(node.ibname);
-
-            int rdma_port = nodes[0].rdma_port;
+                portset.push_back(node.rdma_port);
+            }
+            // int rdma_port = nodes[0].rdma_port;
             // initialization of new librdma
             // nid, ipset, port, thread_id-no use, enable single memory region
-            ctrl = new RdmaCtrl(nid, ipset, rdma_port, true);
+            int dev_id = 1;
+            ctrl = new RdmaCtrl(nid, ipset, portset, true);
             ctrl->open_device();
             ctrl->set_connect_mr(mem, mem_sz);
             ctrl->register_connect_mr();  // single
@@ -69,7 +72,7 @@ class RDMA {
                     continue;
                 }
                 for (uint j = 0; j < num_threads * 2; ++j) {
-                    Qp *qp = ctrl->create_rc_qp(j, i, 0, 1);
+                    Qp *qp = ctrl->create_rc_qp(j, i, dev_id, 1);
                     assert(qp != NULL);
                 }
             }
@@ -81,7 +84,7 @@ class RDMA {
                         continue;
                     }
                     for (uint j = 0; j < num_threads * 2; ++j) {
-                        Qp *qp = ctrl->create_rc_qp(j, i, 0, 1);
+                        Qp *qp = ctrl->create_rc_qp(j, i, dev_id, 1);
                         if (qp->inited_) {
                             connected += 1;
                         } else {

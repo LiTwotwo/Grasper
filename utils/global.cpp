@@ -19,7 +19,6 @@ void InitMPIComm(int* argc, char*** argv, Node & node) {
 
     node.set_world_rank(rank);
     node.set_world_size(num_nodes);
-
     if (rank == MASTER_RANK) {
         node.set_color(0);
     } else {
