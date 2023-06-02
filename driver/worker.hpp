@@ -479,8 +479,11 @@ class Worker {
                 zmq::socket_t sender(context_, ZMQ_PUSH);
                 char addr[64];
                 // port calculation is based on our self-defined protocol
-                sprintf(addr, "tcp://%s:%d", re.hostname.c_str(), workers_[my_node_.get_local_rank()].tcp_port + my_node_.get_world_rank());
+                sprintf(addr, "tcp://%s:%d", re.hostname.c_str(), workers_[my_node_.get_local_rank()].tcp_port + my_node_.get_world_rank() + 100);
                 sender.connect(addr);
+                #ifdef TIMEBREAKDOWN
+                    expert_adapter->PrintTimeResult();
+                #endif
                 cout << "worker_node" << my_node_.get_local_rank() << " sends the results to Client " << re.hostname << endl;
                 sender.send(msg);
 

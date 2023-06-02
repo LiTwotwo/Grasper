@@ -2,7 +2,7 @@
 
 Authors: Hongzhi Chen (hzchen@cse.cuhk.edu.hk)
 */
-
+#define RECORDRESULT
 #ifndef CLIENT_HPP_
 #define CLIENT_HPP_
 

@@ -4,9 +4,9 @@ Authors: Hongzhi Chen (hzchen@cse.cuhk.edu.hk)
          Nick Fang (jcfang6@cse.cuhk.edu.hk)
          Changji Li (cjli@cse.cuhk.edu.hk)
 */
-
 #ifndef EXPERTS_ADAPTER_HPP_
 #define EXPERTS_ADAPTER_HPP_
+#define TIMEBREAKDOWN
 
 #include <map>
 #include <vector>
@@ -105,6 +105,19 @@ class ExpertAdapter {
             thread.join();
     }
 
+    #ifdef TIMEBREAKDOWN
+    void PrintTimeResult() {
+        ofstream outputfile;
+        outputfile.open("timebreak.txt", std::ios_base::app);
+        outputfile << endl;
+        for(auto pr: steps_record) {
+            outputfile << ExpertType[int(pr.first)] << " " << pr.second << endl; 
+        }
+        outputfile.close();
+        steps_record.clear();
+    }
+    #endif
+
     void execute(int tid, Message & msg) {
         Meta & m = msg.meta;
         if (m.msg_type == MSG_T::INIT) {
@@ -153,9 +166,17 @@ class ExpertAdapter {
             EXPERT_T next_expert = ac->second[current_step].expert_type;
             // int offset = (experts_[next_expert]->GetExpertId() + timer_offset) * num_thread_;
 
+            #ifdef TIMEBREAKDOWN
+                uint64_t start_t = timer::get_usec();
+            #endif
+
             // timer::start_timer(tid + offset);
             experts_[next_expert]->process(ac->second, msg);
             // timer::stop_timer(tid + offset);
+            #ifdef TIMEBREAKDOWN
+                uint64_t end_t = timer::get_usec();
+                steps_record[next_expert] += (end_t-start_t)/1000.0;            
+            #endif
         } while (current_step != msg.meta.step);    // process next expert directly if step is modified
     }
 
@@ -238,6 +259,10 @@ class ExpertAdapter {
     // clocks
     vector<uint64_t> times_;
     int num_thread_;
+
+    #ifdef TIMEBREAKDOWN
+        unordered_map<EXPERT_T, double> steps_record;
+    #endif
 
     // 5 more timers for total, recv , send, serialization, create msg
     const static int timer_offset = 5;

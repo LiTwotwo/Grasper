@@ -1,0 +1,3 @@
+Grasper -q BuildIndex(V,id)
+Grasper -q g.V().has("id", 326972).both("knows").in("hasCreator").hasLabel('post").has("creationDate",between("2012","2013")).out("hasTag").not(in("hasTag").hasLabel("post").has("creationDate",lte(2012))).groupCount(name")
+Grasper -q g.V().has("id", 326972).union(properties("firstName", "lastName", "birthday", "locationIP", "browserUsed"), out("isLocatedIn").properties("name"))

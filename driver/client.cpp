@@ -66,7 +66,14 @@ string Client::CommitQuery(string query) {
         }
     }
 
-    result += "[Timer] ";
+    result += "[Timer] ";        
+    
+    #ifdef RECORDRESULT
+        ofstream outputfile;
+        outputfile.open("result.txt", std::ios_base::app);
+        outputfile << time_/1000.0 <<  endl;
+        outputfile.close();
+    #endif
     if (time_ / 1000 == 0) {
         result += to_string(time_) + " us for ProcessQuery";
     } else {
@@ -202,6 +209,7 @@ void Client::run_console(string query_fname) {
         }
 
         cout << "[Client] result: " << result << endl << endl;
+
         return;
     }
 

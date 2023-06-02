@@ -37,7 +37,7 @@ void ClientConnection::Init(vector<Node> & nodes) {
     for (int i = 0 ; i < nodes.size()-1; i++) {
         receivers_[i] = new zmq::socket_t(context_, ZMQ_PULL);
         char addr[64];
-        sprintf(addr, "tcp://*:%d", nodes[i+1].tcp_port + i + 1);
+        sprintf(addr, "tcp://*:%d", nodes[i+1].tcp_port + i + 101);
         receivers_[i]->bind(addr);
     }
 }
