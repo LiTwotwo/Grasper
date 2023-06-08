@@ -68,6 +68,12 @@ string Client::CommitQuery(string query) {
     }
 
     result += "[Timer] ";
+    #ifdef RECORDRESULT
+        ofstream outputfile;
+        outputfile.open("tmp/timerecord.txt", std::ios_base::app);
+        outputfile << time_/1000.0 <<  endl;
+        outputfile.close();
+    #endif
     if (time_ / 1000 == 0) {
         result += to_string(time_) + " us for ProcessQuery";
     } else {

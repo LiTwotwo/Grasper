@@ -6,9 +6,9 @@ Authors: Hongzhi Chen (hzchen@cse.cuhk.edu.hk)
 
 #include "core/rdma_mailbox.hpp"
 
-void RdmaMailbox::Init(vector<Node> & nodes, Node & remote) {
+void RdmaMailbox::Init(vector<Node> & nodes, vector<Node> & memory_nodes) {
     // Init RDMA include connection between other workers and remote servers
-    RDMA_init(node_.get_local_size(), config_->global_num_threads + 1, node_.get_local_rank(), buffer_->GetBuf(), buffer_->GetLocalBufSize(), nodes, remote);
+    RDMA_init(node_.get_local_size(), config_->global_num_threads + 1, node_.get_local_rank(), buffer_->GetBuf(), buffer_->GetLocalBufSize(), nodes, memory_nodes);
 
     int nrbfs = (config_->global_num_workers - 1) * config_->global_num_threads;
 

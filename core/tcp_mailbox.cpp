@@ -27,7 +27,7 @@ TCPMailbox::~TCPMailbox() {
     free(local_msgs);
 }
 
-void TCPMailbox::Init(vector<Node> & nodes, Node & remote) {
+void TCPMailbox::Init(vector<Node> & nodes, vector<Node> & remote_nodes) {
     for (int nid = 0; nid < config_->global_num_workers; nid++) {
         Node & r_node = GetNodeById(nodes, nid + 1);
         string ibname = r_node.ibname;

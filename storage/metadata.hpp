@@ -7,8 +7,8 @@
 
 
 #pragma once
-#define TEST_WITH_COUNT
-#define OP_BATCH
+// #define TEST_WITH_COUNT
+// #define OP_BATCH
 #define MTU 4096
 // #define DEBUG
 #define PRINT_MEM_USAGE

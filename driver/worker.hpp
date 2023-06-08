@@ -34,7 +34,7 @@ Authors: Hongzhi Chen (hzchen@cse.cuhk.edu.hk)
 
 class Worker {
  public:
-    Worker(Node & my_node, vector<Node> & workers, Node & remote): my_node_(my_node), workers_(workers), remote_(remote) {
+    Worker(Node & my_node, vector<Node> & workers, vector<Node> & memory_nodes): my_node_(my_node), workers_(workers), memory_nodes_(memory_nodes) {
         config_ = Config::GetInstance();
         num_query = 0;
         is_emu_mode_ = false;
@@ -86,17 +86,13 @@ class Worker {
         // char w_addr[64];
         char r_addr[64];
 
-        // Attention: bind a new tcp port different from RDMA use TCP to receive from client
+        // Attention: bind a new tcp port different from RDMA TCP to receive from client
         sprintf(addr, "tcp://*:%d", my_node_.tcp_port + 1);
-        // sprintf(w_addr, "tcp://*:%d", my_node_.tcp_port + config_->global_num_threads + 1);
-        sprintf(r_addr, "tcp://%s:%d", remote_.hostname.c_str(), remote_.tcp_port + 1); // LCY: now remote config will be add at the end of ib.cfg
+        sprintf(r_addr, "tcp://%s:%d", memory_nodes_[0].hostname.c_str(), memory_nodes_[0].tcp_port + 1); // LCY: currently only one memory node
 
         // TODO: change to connect addr here, what's the difference?
         receiver_->bind(addr);
         cout << "Receiver bind addr:" << addr << endl;
-
-        // worker_listener_->bind(w_addr);
-        // cout << "Worker listener bind addr:" << w_addr << endl;
 
         remote_listener_->connect(r_addr);
         cout << "Remote listener connect addr:" << r_addr << endl;
@@ -364,12 +360,11 @@ class Worker {
         MPISnapshot* snapshot = MPISnapshot::GetInstance(config_->SNAPSHOT_PATH);
 
         // you can use this if you want to overwrite snapshot
-        // snapshot->DisableRead();
+        snapshot->DisableRead();
         // you can use this if you are testing on a tiny dataset to avoid write snapshot
-        // snapshot->DisableWrite();
+        snapshot->DisableWrite();
 
         // ===================prepare stage=================
-        // NaiveIdMapper * id_mapper = new NaiveIdMapper(my_node_);
         NaiveIdMapper id_mapper(my_node_);
 
         // init core affinity
@@ -380,27 +375,11 @@ class Worker {
         // set the in-memory layout for RDMA buf
         buf_ = new Buffer(my_node_);
         cout << "Worker" << my_node_.get_local_rank() << ": DONE -> Register LOCAL MEM, SIZE = " << buf_->GetLocalBufSize() << endl;
-        
-        // if (config_->global_use_rdma)
-        //     cout << "Worker" << my_node_.get_local_rank() << ": DONE -> Register RDMA MEM, SIZE = " << buf->GetBufSize() << endl;
-        // else
-        //     cout << "Worker" << my_node_.get_local_rank() << ": DONE -> Register MEM for KVS, SIZE = " << buf->GetBufSize() << endl;
 
         mailbox_ = new RdmaMailbox(my_node_, buf_);
-        mailbox_->Init(workers_, remote_);
+        mailbox_->Init(workers_, memory_nodes_);
         cout << "Worker" << my_node_.get_local_rank() << ": DONE -> Mailbox->Init()" << endl;
 
-        // recv meta from remote server
-        // char helloreq[] = "[From Compute]: request graphmeta";
-        // zmq::message_t msg(strlen(helloreq) + 1);
-        // memcpy((void*)msg.data(), helloreq, strlen(helloreq) + 1);
-
-        // remote_listener_->send(msg);
-        // cout << "Send request from Compute server : " << helloreq << endl;
-        // zmq::message_t meta(sizeof(GraphMeta));
-        // remote_listener_->recv(&meta);
-
-        // while(remote_listener_->recv(&meta) != 0); // LCY: need block to recv meta
         size_t meta_size;
         zmq::message_t szmsg(sizeof(size_t));
         remote_listener_->recv(&szmsg);
@@ -433,7 +412,6 @@ class Worker {
         // datastore->WriteSnapshot();
 
         thread recvreq(&Worker::RecvRequest, this);
-        // thread sendmsg(&Worker::SendQueryMsg, this, mailbox_, &core_affinity);
         thread sendmsg(&Worker::SendQueryMsg, this, mailbox_, core_affinity_);
 
         Monitor monitor(my_node_);
@@ -497,7 +475,7 @@ class Worker {
  private:
     Node & my_node_;
     vector<Node> & workers_;
-    Node & remote_;
+    vector<Node> & memory_nodes_;
     Config * config_;
     Parser* parser_;
     IndexStore* index_store_;

@@ -64,9 +64,9 @@ class MPISnapshot {
     }
 
     // to overwrite snapshot (e.g., the file is damaged.)
-    // bool DisableRead() { read_enabled_ = false; }
+    void DisableRead() { read_enabled_ = false; }
     // to avoid write snapshot
-    // bool DisableWrite() { write_enabled_ = false; }
+    void DisableWrite() { write_enabled_ = false; }
 
  private:
     MPIUniqueNamer* unique_namer_;

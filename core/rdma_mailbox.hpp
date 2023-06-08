@@ -45,7 +45,7 @@ class RdmaMailbox : public AbstractMailbox {
         std::cout << "Delete Mailbox" << std::endl;
     }
 
-    void Init(vector<Node> & nodes, Node & remote) override;
+    void Init(vector<Node> & nodes, vector<Node> & remote_nodes) override;
 
     // When sent to the same recv buffer, the consistency relies on
     // the lock in the id_mapper

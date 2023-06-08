@@ -228,7 +228,7 @@ void MetaData::GetAllVertices(int tid, vector<vid_t> & vid_list) {
         uint64_t size = read_sz * sizeof(Vertex);
 
         RDMA &rdma = RDMA::get_rdma();
-        rdma.dev->RdmaRead(tid, REMOTE_NID, send_buf, size, off);
+        rdma.dev->RdmaRead(tid, node_.get_local_rank(), send_buf, size, off);
         Vertex* v = (Vertex *)send_buf;
 
         for(int i = 0; i < read_sz; ++i) {
@@ -403,7 +403,7 @@ void MetaData::DeleteAggData(agg_t key) {
 }
 
 void MetaData::get_string_indexes() {
-    // TODO(big) string index cached in local
+    // string index cached in local
     const string INDEX_PATH = "./data/sf0.1/index/";
     ifstream file;
     string string_line;
@@ -533,16 +533,6 @@ void MetaData::get_schema() {
             vtx_schemas[label].push_back(indexes.str2vpk[property]);            
         }
     }
-    #ifdef DEBUG
-    for(auto it = vtx_schemas.begin(); it != vtx_schemas.end(); ++it) {
-        cout << "Lable id = " << it->first << " Property id = ";
-        vector<label_t>& schema = it->second;
-        for(auto i = schema.begin(); i != schema.end(); ++i) {
-            cout << *i << " "; 
-        }
-        cout << endl;
-    }
-    #endif // DEBUG
 
     file.close();
 
